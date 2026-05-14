@@ -1,0 +1,10 @@
+openai
+python-dotenv
+msal
+requests
+pypdf
+python-docx
+fastapi
+uvicorn
+playwright
+chromium

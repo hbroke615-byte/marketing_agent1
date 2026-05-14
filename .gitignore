@@ -1,0 +1,34 @@
+# Python virtual environment
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code settings
+.vscode/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+
+
+
+# Auth / token files
+*.bin
+*.cache
+*.db
+*.json
