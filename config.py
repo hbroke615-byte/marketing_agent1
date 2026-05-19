@@ -13,9 +13,11 @@ GRAPH_SCOPES = [
 ]
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+APOLLO_API_KEY = os.getenv("APOLLO_API_KEY", "")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 30))
 MARKETING_FOLDER_PATH = os.getenv("MARKETING_FOLDER_PATH", "Marketing")
 LINKEDIN_PROFILE_URL = os.getenv(
     "LINKEDIN_PROFILE_URL",
     "https://www.linkedin.com/in/muhammad-haris-2a805b24b/"
 )
+

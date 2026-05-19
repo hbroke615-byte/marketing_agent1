@@ -428,3 +428,38 @@ class Graph:
         else:
             print(f"Failed to send reply: {response.text[:800]}")
             return False
+
+    def send_new_email(self, to_email, subject, body_text):
+        """Send a fresh outbound email using the Microsoft Graph sendMail endpoint."""
+        token = self._get_access_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        url = "https://graph.microsoft.com/v1.0/me/sendMail"
+        payload = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": "Text",
+                    "content": body_text
+                },
+                "toRecipients": [
+                    {
+                        "emailAddress": {
+                            "address": to_email
+                        }
+                    }
+                ]
+            },
+            "saveToSentItems": "true"
+        }
+        
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code in [200, 202, 204]:
+            return True
+        else:
+            print(f"Failed to send outbound email to {to_email} ({response.status_code}): {response.text[:800]}")
+            return False
+

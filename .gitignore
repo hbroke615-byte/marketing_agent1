@@ -32,3 +32,11 @@ Thumbs.db
 *.cache
 *.db
 *.json
+
+
+.env
+.venv/
+*.bin
+*.db
+*.json
+*.cache

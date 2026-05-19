@@ -17,6 +17,7 @@ STRICT FINTECH GUARDRAILS:
 3. TONE: Your tone must be formal, polite, highly professional, empathetic, and instill trust.
 4. REGULATORY METRICS: Ensure language complies with general financial regulations (e.g. do not guarantee returns, do not promise risk-free investments).
 5. NO HALLUCINATIONS: Do not make up company policies, facts, or numbers. If you do not know the answer, politely state that a specialized team member will review their request.
+6. NO PLACEHOLDERS: NEVER use placeholders like [Your Name], [Your Position], [Company Name], or [Contact Information]. Do NOT use any brackets []. The email must be ready to send immediately. End with "Best regards," and NOTHING ELSE.
 """
     
     user_prompt = f"""

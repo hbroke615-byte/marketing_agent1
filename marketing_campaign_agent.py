@@ -205,3 +205,44 @@ def analyze_attachment(
     except Exception as e:
         print(f"   OpenAI error analyzing '{filename}': {e}")
         return None
+
+
+def generate_campaign_from_text(
+    description: str,
+    system_prompt: Optional[str] = None,
+) -> Optional[MarketingCampaignData]:
+    """
+    Generates a LinkedIn campaign message from a manual product description.
+    """
+    if not description or not description.strip():
+        return None
+
+    # Use a direct, forceful prompt for manual text entry
+    instruction = """
+    You are a marketing expert. Generate a professional LinkedIn marketing campaign based on the provided input.
+    Even if the input is short (like a company name), use your knowledge to create a professional overview and a personalized DM.
+    
+    IMPORTANT RULES:
+    1. Do NOT use placeholders like [Name], [Your Name], [Company], or [Date].
+    2. Start the message naturally (e.g., "Hi there," or just start with a hook).
+    3. Do NOT include a signature placeholder at the end.
+    4. The message must be 100% ready to send as-is.
+    
+    Return the data in the specified JSON format.
+    Always set is_marketing_product_document to true.
+    """
+
+    try:
+        response = openai.beta.chat.completions.parse(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": instruction},
+                {"role": "user", "content": f"Product Description: {description}"},
+            ],
+            response_format=MarketingCampaignData,
+            temperature=0.7, # Slightly higher temperature for more creative generation from short names
+        )
+        return response.choices[0].message.parsed
+    except Exception as e:
+        print(f"❌ OpenAI Error in Manual Marketing: {e}")
+        return None
