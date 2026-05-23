@@ -1,0 +1,1183 @@
+[
+  {
+    "job_id": "9642dd05-810a-40bd-9f34-9af30f43e49a",
+    "status": "done",
+    "progress_msg": "Sending DM 2/2: Muhammad Haris...",
+    "description": "create compain for pizzahut",
+    "message": "Hi there,\n\nCraving a delicious pizza experience without the hassle of cooking? Pizza Hut has you covered with our mouth-watering selection of pizzas and sides, perfect for any gathering or quiet night in. Whether you're a fan of classic flavors or looking for something new, we have something to satisfy every craving.\n\nExplore our menu and discover special deals that make enjoying great pizza even more rewarding. Visit our website to order your favorite pies today and experience the convenience of Pizza Hut!\n\n#PizzaHut #PizzaLovers #OrderNow",
+    "total": 2,
+    "sent": 2,
+    "failed": 0,
+    "results": [
+      {
+        "name": "Corey Dolan",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "sent": true
+      },
+      {
+        "name": "Muhammad Haris",
+        "linkedin": "https://www.linkedin.com/in/muhammad-haris-2a805b24b/",
+        "sent": true
+      }
+    ],
+    "created_at": 1779446301.0481286,
+    "linkedin_contacts": [
+      {
+        "id": "cdolanpharmd@gmail.com",
+        "name": "Corey Dolan",
+        "title": "Owner/director Of Pharmacy Operations",
+        "email": "cdolanpharmd@gmail.com",
+        "company": "Preckshot Professional Phrm",
+        "industry": "Pharmaceuticals",
+        "city": "Peoria",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "fetched_at": "2026-05-22 09:42:52",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "https://www.linkedin.com/in/muhammad-haris-2a805b24b/",
+        "name": "Muhammad Haris",
+        "title": "Test Recipient",
+        "email": "",
+        "company": "Test",
+        "industry": "Test",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/muhammad-haris-2a805b24b/",
+        "fetched_at": "2026-05-22 09:00:00",
+        "status": "Replied",
+        "subject": null,
+        "draft": "Hi Muhammad, this is the original test campaign DM you would have received from Dalbir Bains/Galaxy Pharma.",
+        "sent_at": "2026-05-22 09:00:00",
+        "replied_at": "2026-05-22 10:30:11"
+      }
+    ]
+  },
+  {
+    "job_id": "bc2cb7af-809e-4b19-9049-5049f4f3d219",
+    "status": "preview_ready",
+    "progress_msg": "Preview ready — 0 new LinkedIn contact(s) to DM (2 already DM'd, skipped)",
+    "description": "create compain for cars",
+    "message": "Hi there,\n\nAre you ready to revolutionize your driving experience with an eco-friendly twist? Our innovative electric cars are designed for those who value sustainability without compromising on performance. With zero emissions, advanced technology, and a sleek design, our cars offer a smarter, cleaner way to hit the road. Curious to learn more about how you can join the movement towards a greener future? Let's connect and explore the possibilities! #ElectricCars #SustainableDriving #Innovation",
+    "total": 0,
+    "sent": 0,
+    "failed": 0,
+    "results": [],
+    "created_at": 1779446860.0438433,
+    "linkedin_contacts": []
+  },
+  {
+    "job_id": "255d726a-d390-434a-b79f-055bc8f9dc9b",
+    "status": "preview_ready",
+    "progress_msg": "Preview ready — 2 new LinkedIn contact(s) to DM (2 already DM'd, skipped)",
+    "description": "create comain for pizza",
+    "message": "Hi there,\n\nAre you a pizza restaurant owner looking to boost your online presence? Create Comain for Pizza is here to help you carve out a unique space on the web. With customizable domain options and SEO optimization features, your business will stand out and attract more customers. Let's enhance your digital footprint together!\n\nReach out today to learn how we can transform your online identity.\n\n#PizzaBusiness #DomainNames #DigitalMarketing #SEO",
+    "total": 2,
+    "sent": 0,
+    "failed": 0,
+    "results": [],
+    "created_at": 1779446912.1467617,
+    "linkedin_contacts": [
+      {
+        "id": "nwilson@4activelife.com",
+        "name": "Natalie Wilson",
+        "title": "Owner/CPO",
+        "email": "nwilson@4activelife.com",
+        "company": "Active Life Health",
+        "industry": "Medical Practice",
+        "city": "Los Angeles",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "fetched_at": "2026-05-22 10:49:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "robert@iplrx.com",
+        "name": "Robert Sonnier",
+        "title": "Owner & Director Of Pharmacy Services At Institutional Pharmacies",
+        "email": "robert@iplrx.com",
+        "company": "Institutional Pharmacies Of Louisiana",
+        "industry": "Pharmaceuticals",
+        "city": "Scott",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "fetched_at": "2026-05-22 10:49:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  },
+  {
+    "job_id": "16012d2c-e425-4ef8-8535-0d4622fe0beb",
+    "status": "done",
+    "progress_msg": "Sending DM 4/4: Vichar Shroff...",
+    "description": "create compaign for  Galaxy Pharmaceuticals Marketing Copywriter (RTU Ketamine HCl 50 mg/5 mL)",
+    "message": "Hi there,\n\nAre you looking for a reliable and efficient solution to enhance your anesthesia and pain management practices? Discover Galaxy Pharmaceuticals' RTU Ketamine HCl 50 mg/5 mL. Our ready-to-use formulation ensures swift administration, maintaining precision and effectiveness in every procedure. Ideal for healthcare professionals aiming for excellence in patient care.\n\nLearn more about how our product can support your medical practice. #HealthcareInnovation #AnesthesiaSolutions #GalaxyPharma",
+    "total": 4,
+    "sent": 1,
+    "failed": 3,
+    "results": [
+      {
+        "name": "Natalie Wilson",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "sent": false
+      },
+      {
+        "name": "Robert Sonnier",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "sent": true
+      },
+      {
+        "name": "Jennifer Goldstein",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "sent": false
+      },
+      {
+        "name": "Vichar Shroff",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "sent": false
+      }
+    ],
+    "created_at": 1779462687.369326,
+    "linkedin_contacts": [
+      {
+        "id": "nwilson@4activelife.com",
+        "name": "Natalie Wilson",
+        "title": "Owner/CPO",
+        "email": "nwilson@4activelife.com",
+        "company": "Active Life Health",
+        "industry": "Medical Practice",
+        "city": "Los Angeles",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "fetched_at": "2026-05-22 10:49:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "robert@iplrx.com",
+        "name": "Robert Sonnier",
+        "title": "Owner & Director Of Pharmacy Services At Institutional Pharmacies",
+        "email": "robert@iplrx.com",
+        "company": "Institutional Pharmacies Of Louisiana",
+        "industry": "Pharmaceuticals",
+        "city": "Scott",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "fetched_at": "2026-05-22 10:49:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "jen@soarautismcenter.com",
+        "name": "Jennifer Goldstein",
+        "title": "Co-founder And CPO",
+        "email": "jen@soarautismcenter.com",
+        "company": "Soar Autism Center",
+        "industry": "Hospital & Health Care",
+        "city": "Denver",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vichar@confido.health",
+        "name": "Vichar Shroff",
+        "title": "Co-founder And CPO",
+        "email": "vichar@confido.health",
+        "company": "Confido Health",
+        "industry": "Hospital & Health Care",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  },
+  {
+    "job_id": "47fadc13-133d-4767-9497-cf48c0e1b127",
+    "status": "done",
+    "progress_msg": "Sending DM 9/9: Vinnie Dam...",
+    "description": "create compaign for anesthesia and pain management practices? Discover Galaxy Pharmaceuticals' RTU Ketamine HCl 50 mg/5 mL.",
+    "message": "Hi there,\n\nStreamline your practice with Galaxy Pharmaceuticals' RTU Ketamine HCl 50 mg/5 mL. Designed for anesthesia and pain management clinics, our ready-to-use ketamine solution ensures precise dosing and enhances patient safety, all while reducing preparation time. Discover how our product can optimize your operational efficiency today. \n\n#Anesthesia #PainManagement #PharmaceuticalInnovation #PatientSafety",
+    "total": 9,
+    "sent": 0,
+    "failed": 9,
+    "results": [
+      {
+        "name": "Natalie Wilson",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "sent": false
+      },
+      {
+        "name": "Jennifer Goldstein",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "sent": false
+      },
+      {
+        "name": "Vichar Shroff",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "sent": false
+      },
+      {
+        "name": "Yasaman Nematbakhsh",
+        "linkedin": "https://www.linkedin.com/in/yasaman-nemat",
+        "sent": false
+      },
+      {
+        "name": "Matt Lekrey",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "sent": false
+      },
+      {
+        "name": "Ankur Gupta",
+        "linkedin": "https://www.linkedin.com/in/ankur-g-3043b97",
+        "sent": false
+      },
+      {
+        "name": "Matthew Woo",
+        "linkedin": "https://www.linkedin.com/in/matthewedanwoo",
+        "sent": false
+      },
+      {
+        "name": "Zachary Tackett",
+        "linkedin": "https://www.linkedin.com/in/zachary-tackett-pharmd-14a89231",
+        "sent": false
+      },
+      {
+        "name": "Vinnie Dam",
+        "linkedin": "https://www.linkedin.com/in/vinnie-dam-9981435",
+        "sent": false
+      }
+    ],
+    "created_at": 1779467307.11469,
+    "linkedin_contacts": [
+      {
+        "id": "nwilson@4activelife.com",
+        "name": "Natalie Wilson",
+        "title": "Owner/CPO",
+        "email": "nwilson@4activelife.com",
+        "company": "Active Life Health",
+        "industry": "Medical Practice",
+        "city": "Los Angeles",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "fetched_at": "2026-05-22 10:49:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "jen@soarautismcenter.com",
+        "name": "Jennifer Goldstein",
+        "title": "Co-founder And CPO",
+        "email": "jen@soarautismcenter.com",
+        "company": "Soar Autism Center",
+        "industry": "Hospital & Health Care",
+        "city": "Denver",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vichar@confido.health",
+        "name": "Vichar Shroff",
+        "title": "Co-founder And CPO",
+        "email": "vichar@confido.health",
+        "company": "Confido Health",
+        "industry": "Hospital & Health Care",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "yasaman@adra.ai",
+        "name": "Yasaman Nematbakhsh",
+        "title": "Co-founder & CPO",
+        "email": "yasaman@adra.ai",
+        "company": "Adravision",
+        "industry": "Hospital & Health Care",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/yasaman-nemat",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "matt@remo.health",
+        "name": "Matt Lekrey",
+        "title": "Founder | CPO",
+        "email": "matt@remo.health",
+        "company": "Remo Health",
+        "industry": "Hospital & Health Care",
+        "city": "Jackson",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "ankur@boltehr.com",
+        "name": "Ankur Gupta",
+        "title": "Founder | CPO | CTO",
+        "email": "ankur@boltehr.com",
+        "company": "Boltehr",
+        "industry": "Hospital & Health Care",
+        "city": "Cary",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/ankur-g-3043b97",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "matthew@summerhealth.com",
+        "name": "Matthew Woo",
+        "title": "Co-founder, President & CPO",
+        "email": "matthew@summerhealth.com",
+        "company": "Summer Health",
+        "industry": "Hospital & Health Care",
+        "city": "San Francisco",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matthewedanwoo",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "ztackett@resistome-clinical.com",
+        "name": "Zachary Tackett",
+        "title": "Founder And Chief Pharmacy Officer",
+        "email": "ztackett@resistome-clinical.com",
+        "company": "Resistome Clinical Services",
+        "industry": "Hospital & Health Care",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/zachary-tackett-pharmd-14a89231",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vinnie.dam@mixlab.com",
+        "name": "Vinnie Dam",
+        "title": "Founder / Chief Pharmacy Officer",
+        "email": "vinnie.dam@mixlab.com",
+        "company": "Mixlab",
+        "industry": "Pharmaceuticals",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vinnie-dam-9981435",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  },
+  {
+    "job_id": "b2748e95-4851-470a-baee-05f1575b71d9",
+    "status": "error",
+    "progress_msg": "Sending DM 8/9: Zachary Tackett...",
+    "description": "create compain for Galaxy Pharmaceuticals' RTU Ketamine HCl 50 mg/5 mL",
+    "message": "Hi there,\n\nAre you looking for a more efficient and reliable solution for anesthesia and pain management? Discover Galaxy Pharmaceuticals' RTU Ketamine HCl 50 mg/5 mL, a ready-to-use formulation designed to enhance operational efficiency and reduce the risk of dosage errors. With its precise and consistent delivery, our product supports healthcare professionals in providing top-quality patient care. \n\nLearn more about how RTU Ketamine HCl can streamline your medical processes and ensure reliable outcomes. Visit our website or reach out for more information.\n\n#HealthcareInnovation #Anesthesia #PainManagement #GalaxyPharmaceuticals",
+    "total": 9,
+    "sent": 0,
+    "failed": 7,
+    "results": [
+      {
+        "name": "Natalie Wilson",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "sent": false
+      },
+      {
+        "name": "Jennifer Goldstein",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "sent": false
+      },
+      {
+        "name": "Vichar Shroff",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "sent": false
+      },
+      {
+        "name": "Yasaman Nematbakhsh",
+        "linkedin": "https://www.linkedin.com/in/yasaman-nemat",
+        "sent": false
+      },
+      {
+        "name": "Matt Lekrey",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "sent": false
+      },
+      {
+        "name": "Ankur Gupta",
+        "linkedin": "https://www.linkedin.com/in/ankur-g-3043b97",
+        "sent": false
+      },
+      {
+        "name": "Matthew Woo",
+        "linkedin": "https://www.linkedin.com/in/matthewedanwoo",
+        "sent": false
+      }
+    ],
+    "created_at": 1779468669.4154842,
+    "linkedin_contacts": [
+      {
+        "id": "nwilson@4activelife.com",
+        "name": "Natalie Wilson",
+        "title": "Owner/CPO",
+        "email": "nwilson@4activelife.com",
+        "company": "Active Life Health",
+        "industry": "Medical Practice",
+        "city": "Los Angeles",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "fetched_at": "2026-05-22 10:49:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "jen@soarautismcenter.com",
+        "name": "Jennifer Goldstein",
+        "title": "Co-founder And CPO",
+        "email": "jen@soarautismcenter.com",
+        "company": "Soar Autism Center",
+        "industry": "Hospital & Health Care",
+        "city": "Denver",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vichar@confido.health",
+        "name": "Vichar Shroff",
+        "title": "Co-founder And CPO",
+        "email": "vichar@confido.health",
+        "company": "Confido Health",
+        "industry": "Hospital & Health Care",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "yasaman@adra.ai",
+        "name": "Yasaman Nematbakhsh",
+        "title": "Co-founder & CPO",
+        "email": "yasaman@adra.ai",
+        "company": "Adravision",
+        "industry": "Hospital & Health Care",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/yasaman-nemat",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "matt@remo.health",
+        "name": "Matt Lekrey",
+        "title": "Founder | CPO",
+        "email": "matt@remo.health",
+        "company": "Remo Health",
+        "industry": "Hospital & Health Care",
+        "city": "Jackson",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "ankur@boltehr.com",
+        "name": "Ankur Gupta",
+        "title": "Founder | CPO | CTO",
+        "email": "ankur@boltehr.com",
+        "company": "Boltehr",
+        "industry": "Hospital & Health Care",
+        "city": "Cary",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/ankur-g-3043b97",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "matthew@summerhealth.com",
+        "name": "Matthew Woo",
+        "title": "Co-founder, President & CPO",
+        "email": "matthew@summerhealth.com",
+        "company": "Summer Health",
+        "industry": "Hospital & Health Care",
+        "city": "San Francisco",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matthewedanwoo",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "ztackett@resistome-clinical.com",
+        "name": "Zachary Tackett",
+        "title": "Founder And Chief Pharmacy Officer",
+        "email": "ztackett@resistome-clinical.com",
+        "company": "Resistome Clinical Services",
+        "industry": "Hospital & Health Care",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/zachary-tackett-pharmd-14a89231",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vinnie.dam@mixlab.com",
+        "name": "Vinnie Dam",
+        "title": "Founder / Chief Pharmacy Officer",
+        "email": "vinnie.dam@mixlab.com",
+        "company": "Mixlab",
+        "industry": "Pharmaceuticals",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vinnie-dam-9981435",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ],
+    "error": "Process restarted while this campaign was running. Please re-run."
+  },
+  {
+    "job_id": "52055866-aa99-490f-8c3c-635333d444fc",
+    "status": "error",
+    "progress_msg": "Sending DM 2/9: Jennifer Goldstein...",
+    "description": "create compaign for pizzaa hut",
+    "message": "Hi there,\n\nCraving a pizza night? 🍕 Discover the perfect pizza experience with Pizza Hut! From classic flavors to innovative new recipes, our menu is crafted to satisfy every craving. Whether you're dining in or enjoying a cozy night at home, our pizzas, made with the freshest ingredients, are just a click away. Plus, don't miss our special promotions and discounts!\n\nReady to indulge? Visit our website to explore our menu and place your order today.\n\n#PizzaHut #PizzaLovers #Foodie #FamilyTime #SpecialOffers",
+    "total": 9,
+    "sent": 0,
+    "failed": 1,
+    "results": [
+      {
+        "name": "Natalie Wilson",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "sent": false
+      }
+    ],
+    "created_at": 1779469442.273249,
+    "linkedin_contacts": [
+      {
+        "id": "nwilson@4activelife.com",
+        "name": "Natalie Wilson",
+        "title": "Owner/CPO",
+        "email": "nwilson@4activelife.com",
+        "company": "Active Life Health",
+        "industry": "Medical Practice",
+        "city": "Los Angeles",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "fetched_at": "2026-05-22 10:49:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "jen@soarautismcenter.com",
+        "name": "Jennifer Goldstein",
+        "title": "Co-founder And CPO",
+        "email": "jen@soarautismcenter.com",
+        "company": "Soar Autism Center",
+        "industry": "Hospital & Health Care",
+        "city": "Denver",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vichar@confido.health",
+        "name": "Vichar Shroff",
+        "title": "Co-founder And CPO",
+        "email": "vichar@confido.health",
+        "company": "Confido Health",
+        "industry": "Hospital & Health Care",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "fetched_at": "2026-05-22 15:11:51",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "yasaman@adra.ai",
+        "name": "Yasaman Nematbakhsh",
+        "title": "Co-founder & CPO",
+        "email": "yasaman@adra.ai",
+        "company": "Adravision",
+        "industry": "Hospital & Health Care",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/yasaman-nemat",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "matt@remo.health",
+        "name": "Matt Lekrey",
+        "title": "Founder | CPO",
+        "email": "matt@remo.health",
+        "company": "Remo Health",
+        "industry": "Hospital & Health Care",
+        "city": "Jackson",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "ankur@boltehr.com",
+        "name": "Ankur Gupta",
+        "title": "Founder | CPO | CTO",
+        "email": "ankur@boltehr.com",
+        "company": "Boltehr",
+        "industry": "Hospital & Health Care",
+        "city": "Cary",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/ankur-g-3043b97",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "matthew@summerhealth.com",
+        "name": "Matthew Woo",
+        "title": "Co-founder, President & CPO",
+        "email": "matthew@summerhealth.com",
+        "company": "Summer Health",
+        "industry": "Hospital & Health Care",
+        "city": "San Francisco",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matthewedanwoo",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "ztackett@resistome-clinical.com",
+        "name": "Zachary Tackett",
+        "title": "Founder And Chief Pharmacy Officer",
+        "email": "ztackett@resistome-clinical.com",
+        "company": "Resistome Clinical Services",
+        "industry": "Hospital & Health Care",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/zachary-tackett-pharmd-14a89231",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vinnie.dam@mixlab.com",
+        "name": "Vinnie Dam",
+        "title": "Founder / Chief Pharmacy Officer",
+        "email": "vinnie.dam@mixlab.com",
+        "company": "Mixlab",
+        "industry": "Pharmaceuticals",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vinnie-dam-9981435",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ],
+    "error": "Process restarted while this campaign was running. Please re-run."
+  },
+  {
+    "job_id": "c4087d0c-802a-49cf-898b-ee03a93ba0a9",
+    "status": "done",
+    "progress_msg": "Sending DM 2/2: Corey Dolan...",
+    "description": "creaate compaain for pizza hut",
+    "message": "Hi there, \n\nAre you craving something delicious and convenient for your next meal? At Pizza Hut, we offer a variety of mouth-watering pizzas and sides that are perfect for any occasion. Whether you're planning a family night in or need a quick lunch at the office, we've got you covered with dine-in, take-out, and delivery options.\n\nCheck out our latest promotions and see how we can satisfy your cravings today. Join our loyalty program to enjoy exclusive offers and rewards.\n\nCraving something delicious? Let Pizza Hut take care of it! 🍕 #PizzaHut #DeliciousConvenience #PizzaLovers",
+    "total": 2,
+    "sent": 1,
+    "failed": 1,
+    "results": [
+      {
+        "name": "Matt Lekrey",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "sent": true
+      },
+      {
+        "name": "Corey Dolan",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "sent": false
+      }
+    ],
+    "created_at": 1779469890.0281832,
+    "linkedin_contacts": [
+      {
+        "id": "matt@remo.health",
+        "name": "Matt Lekrey",
+        "title": "Founder | CPO",
+        "email": "matt@remo.health",
+        "company": "Remo Health",
+        "industry": "Hospital & Health Care",
+        "city": "Jackson",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "fetched_at": "2026-05-22 16:29:25",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "cdolanpharmd@gmail.com",
+        "name": "Corey Dolan",
+        "title": "Owner/director Of Pharmacy Operations",
+        "email": "cdolanpharmd@gmail.com",
+        "company": "Preckshot Professional Phrm",
+        "industry": "Pharmaceuticals",
+        "city": "Peoria",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "fetched_at": "2026-05-22 17:11:53",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  },
+  {
+    "job_id": "9a1d66ea-c4cf-4ffd-880b-4c4f97e480cf",
+    "status": "done",
+    "progress_msg": "Sending DM 2/2: Robert Sonnier...",
+    "description": "create compaign for medicines",
+    "message": "Hi there,\n\nAre you looking to enhance your pharmaceutical offerings with innovative, high-quality medicines? Our advanced formulations are designed to meet the evolving needs of healthcare professionals and patients alike. Join our network today and help us transform patient care with our certified and cost-effective solutions.\n\nLet's connect to discuss how we can support your distribution needs and elevate your product portfolio.\n\n#HealthcareInnovation #PharmaceuticalExcellence #PatientCare",
+    "total": 2,
+    "sent": 0,
+    "failed": 2,
+    "results": [
+      {
+        "name": "Corey Dolan",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "sent": false
+      },
+      {
+        "name": "Robert Sonnier",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "sent": false
+      }
+    ],
+    "created_at": 1779552568.7307565,
+    "linkedin_contacts": [
+      {
+        "id": "cdolanpharmd@gmail.com",
+        "name": "Corey Dolan",
+        "title": "Owner/director Of Pharmacy Operations",
+        "email": "cdolanpharmd@gmail.com",
+        "company": "Preckshot Professional Phrm",
+        "industry": "Pharmaceuticals",
+        "city": "Peoria",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "fetched_at": "2026-05-23 16:10:37",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "robert@iplrx.com",
+        "name": "Robert Sonnier",
+        "title": "Owner & Director Of Pharmacy Services At Institutional Pharmacies",
+        "email": "robert@iplrx.com",
+        "company": "Institutional Pharmacies Of Louisiana",
+        "industry": "Pharmaceuticals",
+        "city": "Scott",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "fetched_at": "2026-05-23 16:10:37",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  },
+  {
+    "job_id": "d987c23d-5bb3-4b46-a207-adc3915d56e9",
+    "status": "done",
+    "progress_msg": "Sending DM 3/3: Robert Sonnier...",
+    "description": "create compaign for cars",
+    "message": "Hi there,\n\nAre you looking to make a positive impact on the environment while enjoying a smooth and stylish ride? Discover the power of EcoDrive Automotive's eco-friendly cars. Our vehicles are designed for those who value sustainability without sacrificing performance. With hybrid and electric models packed with advanced safety and smart connectivity features, EcoDrive offers a driving experience that's both responsible and enjoyable. Ready to take the next step towards a greener future? Let's connect and explore how EcoDrive can meet your driving needs. \n\n#EcoDrive #GreenDriving #SustainableMobility #Innovation",
+    "total": 3,
+    "sent": 0,
+    "failed": 3,
+    "results": [
+      {
+        "name": "Corey Dolan",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "sent": false
+      },
+      {
+        "name": "Teresa Mitchell",
+        "linkedin": "https://www.linkedin.com/in/teresa-mitchell-1a056a37",
+        "sent": false
+      },
+      {
+        "name": "Robert Sonnier",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "sent": false
+      }
+    ],
+    "created_at": 1779553189.332766,
+    "linkedin_contacts": [
+      {
+        "id": "cdolanpharmd@gmail.com",
+        "name": "Corey Dolan",
+        "title": "Owner/director Of Pharmacy Operations",
+        "email": "cdolanpharmd@gmail.com",
+        "company": "Preckshot Professional Phrm",
+        "industry": "Pharmaceuticals",
+        "city": "Peoria",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "fetched_at": "2026-05-23 16:10:37",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "tmitchell@totalcareburlington.com",
+        "name": "Teresa Mitchell",
+        "title": "Owner/chief Pharmacist",
+        "email": "tmitchell@totalcareburlington.com",
+        "company": "Total Care Pharmacy",
+        "industry": "Pharmaceuticals",
+        "city": "Camilla",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/teresa-mitchell-1a056a37",
+        "fetched_at": "2026-05-23 13:28:56",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "robert@iplrx.com",
+        "name": "Robert Sonnier",
+        "title": "Owner & Director Of Pharmacy Services At Institutional Pharmacies",
+        "email": "robert@iplrx.com",
+        "company": "Institutional Pharmacies Of Louisiana",
+        "industry": "Pharmaceuticals",
+        "city": "Scott",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "fetched_at": "2026-05-23 16:20:15",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  },
+  {
+    "job_id": "f9a44eec-5b40-4c30-913e-0f2cb04198de",
+    "status": "done",
+    "progress_msg": "Sending DM 3/3: Robert Sonnier...",
+    "description": "create compaaign for medicine",
+    "message": "Hi there,\n\nWe're excited to introduce HealthGuard Plus, a breakthrough in patient care designed to enhance treatment outcomes with a focus on safety and efficacy. With minimal side effects and supported by robust clinical trials, HealthGuard Plus offers a reliable solution for healthcare providers looking to improve patient care. \n\nConnect with us to learn how HealthGuard Plus can make a difference in your practice and patient lives. Let's ensure better health outcomes together!\n\n#HealthGuardPlus #PatientCare #HealthcareInnovation #MedicalAdvancements",
+    "total": 3,
+    "sent": 0,
+    "failed": 3,
+    "results": [
+      {
+        "name": "Corey Dolan",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "sent": false
+      },
+      {
+        "name": "Teresa Mitchell",
+        "linkedin": "https://www.linkedin.com/in/teresa-mitchell-1a056a37",
+        "sent": false
+      },
+      {
+        "name": "Robert Sonnier",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "sent": false
+      }
+    ],
+    "created_at": 1779553537.5782046,
+    "linkedin_contacts": [
+      {
+        "id": "cdolanpharmd@gmail.com",
+        "name": "Corey Dolan",
+        "title": "Owner/director Of Pharmacy Operations",
+        "email": "cdolanpharmd@gmail.com",
+        "company": "Preckshot Professional Phrm",
+        "industry": "Pharmaceuticals",
+        "city": "Peoria",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "fetched_at": "2026-05-23 16:10:37",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "tmitchell@totalcareburlington.com",
+        "name": "Teresa Mitchell",
+        "title": "Owner/chief Pharmacist",
+        "email": "tmitchell@totalcareburlington.com",
+        "company": "Total Care Pharmacy",
+        "industry": "Pharmaceuticals",
+        "city": "Camilla",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/teresa-mitchell-1a056a37",
+        "fetched_at": "2026-05-23 13:28:56",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "robert@iplrx.com",
+        "name": "Robert Sonnier",
+        "title": "Owner & Director Of Pharmacy Services At Institutional Pharmacies",
+        "email": "robert@iplrx.com",
+        "company": "Institutional Pharmacies Of Louisiana",
+        "industry": "Pharmaceuticals",
+        "city": "Scott",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "fetched_at": "2026-05-23 16:20:15",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  },
+  {
+    "job_id": "ddf9f437-5c46-40cd-8a3f-6b796f9c7861",
+    "status": "running",
+    "progress_msg": "Sending DM 3/10: Corey Dolan...",
+    "description": "create compain for medicine",
+    "message": "Hi there, are you looking for a reliable solution to enhance patient care? Discover HealthGuard Plus, a groundbreaking product that merges the best of traditional medicine with cutting-edge research. It's designed to boost the immune system and improve overall wellness without any artificial additives. Let's connect to explore how HealthGuard Plus can benefit your practice and support your patients' health goals. #HealthcareInnovation #PatientCare #WellnessSolutions",
+    "total": 10,
+    "sent": 0,
+    "failed": 2,
+    "results": [
+      {
+        "name": "Natalie Wilson",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "sent": false
+      },
+      {
+        "name": "Robert Sonnier",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "sent": false
+      }
+    ],
+    "created_at": 1779574300.59591,
+    "linkedin_contacts": [
+      {
+        "id": "nwilson@4activelife.com",
+        "name": "Natalie Wilson",
+        "title": "Owner/CPO",
+        "email": "nwilson@4activelife.com",
+        "company": "Active Life Health",
+        "industry": "Medical Practice",
+        "city": "Los Angeles",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/natalie-wilson-msop-cpo-092682143",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "robert@iplrx.com",
+        "name": "Robert Sonnier",
+        "title": "Owner & Director Of Pharmacy Services At Institutional Pharmacies",
+        "email": "robert@iplrx.com",
+        "company": "Institutional Pharmacies Of Louisiana",
+        "industry": "Pharmaceuticals",
+        "city": "Scott",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/robert-sonnier-31173322",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "cdolanpharmd@gmail.com",
+        "name": "Corey Dolan",
+        "title": "Owner/director Of Pharmacy Operations",
+        "email": "cdolanpharmd@gmail.com",
+        "company": "Preckshot Professional Phrm",
+        "industry": "Pharmaceuticals",
+        "city": "Peoria",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/corey-dolan-58258638",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "matt@remo.health",
+        "name": "Matt Lekrey",
+        "title": "Founder | CPO",
+        "email": "matt@remo.health",
+        "company": "Remo Health",
+        "industry": "Hospital & Health Care",
+        "city": "Jackson",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/matt-lekrey-921ab665",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "brodie.rice@pivotpo.com",
+        "name": "Brodie Rice",
+        "title": "Founder/owner CPO",
+        "email": "brodie.rice@pivotpo.com",
+        "company": "Pivot Prosthetics And Orthotics",
+        "industry": "Medical Practice",
+        "city": "Gillette",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/brodie-rice",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "jen@soarautismcenter.com",
+        "name": "Jennifer Goldstein",
+        "title": "Co-founder And CPO",
+        "email": "jen@soarautismcenter.com",
+        "company": "Soar Autism Center",
+        "industry": "Hospital & Health Care",
+        "city": "Denver",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/jennifer-goldstein-37703256",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "ankur@boltehr.com",
+        "name": "Ankur Gupta",
+        "title": "Founder | CPO | CTO",
+        "email": "ankur@boltehr.com",
+        "company": "Boltehr",
+        "industry": "Hospital & Health Care",
+        "city": "Cary",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/ankur-g-3043b97",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "yasaman@adra.ai",
+        "name": "Yasaman Nematbakhsh",
+        "title": "Co-founder & CPO",
+        "email": "yasaman@adra.ai",
+        "company": "Adravision",
+        "industry": "Hospital & Health Care",
+        "city": "",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/yasaman-nemat",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "brittany@limbionics.com",
+        "name": "Brittany Stresing",
+        "title": "CPO, Faaop And President/ Owner",
+        "email": "brittany@limbionics.com",
+        "company": "Limbionics",
+        "industry": "Medical Practice",
+        "city": "Durham",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/brittany-stresing-61b6b972",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      },
+      {
+        "id": "vichar@confido.health",
+        "name": "Vichar Shroff",
+        "title": "Co-founder And CPO",
+        "email": "vichar@confido.health",
+        "company": "Confido Health",
+        "industry": "Hospital & Health Care",
+        "city": "New York",
+        "country": "United States",
+        "linkedin": "https://www.linkedin.com/in/vichar-shroff",
+        "fetched_at": "2026-05-23 22:12:04",
+        "status": "Lead Fetched",
+        "subject": null,
+        "draft": null
+      }
+    ]
+  }
+]
