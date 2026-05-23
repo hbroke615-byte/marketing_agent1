@@ -58,3 +58,91 @@ Body:
     except Exception as e:
         print(f"Error generating AI draft: {e}")
         return f"[Error generating draft: {e}]"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# LinkedIn DM reply drafting
+# ───────────────────────────────────────────────────────────────────────────
+
+LINKEDIN_REPLY_SYSTEM_PROMPT = """You are a senior B2B sales and marketing
+representative at Galaxy Pharma replying to LinkedIn direct messages on behalf
+of Dalbir Bains.
+
+Write a single LinkedIn DM reply to the most recent incoming message. The reply
+will be sent as-is — no human editing.
+
+STRICT RULES (non-negotiable):
+1. LinkedIn DM tone: short, warm, conversational. 2–5 sentences max. No
+   formal "Dear …" opening, no formal "Best regards, …" sign-off.
+2. NEVER use bracketed placeholders. Forbidden: [Your Name], [Name],
+   [Your Company], [Company Name], [Your Position], [Title], [Insert ...],
+   [Date], [Recipient], [Contact]. If you can't determine a real fact, omit
+   the sentence.
+3. Do NOT add a name signature at the end. LinkedIn already shows who sent
+   the message.
+4. No subject lines. No email-style headers. Just the message text.
+5. If the person asked a specific question, answer it directly. If they
+   declined or unsubscribed, respond politely and don't push.
+6. Use the full conversation history (the original campaign DM and any
+   replies that followed) so your response is informed by what was already
+   said. Don't repeat yourself.
+"""
+
+
+def generate_linkedin_reply(
+    incoming_message: str,
+    conversation_history: list[dict] | None = None,
+    contact_metadata: dict | None = None,
+    original_campaign: str | None = None,
+) -> str:
+    """Draft a LinkedIn DM reply.
+
+    incoming_message      — the latest message we received (the one to reply to).
+    conversation_history  — list of {sender, text, ts} from linkedin_inbox.py,
+                            chronological. Includes the original campaign + any
+                            back-and-forth. Used for full context.
+    contact_metadata      — optional {"name", "title", "company", "industry",
+                            "city", "country"} from marketing_contacts.json.
+    original_campaign     — optional. The original DM we sent (also in history,
+                            but the caller may want to highlight it).
+    """
+    parts = ["Recipient profile:"]
+    if contact_metadata:
+        for k in ("name", "title", "company", "industry", "city", "country"):
+            v = contact_metadata.get(k)
+            if v:
+                parts.append(f"  {k}: {v}")
+
+    if original_campaign:
+        parts.append("\nOriginal campaign DM we sent them:")
+        parts.append(original_campaign.strip())
+
+    if conversation_history:
+        parts.append("\nFull conversation so far (chronological):")
+        for i, m in enumerate(conversation_history, 1):
+            sender = m.get("sender") or "?"
+            text = (m.get("text") or "").strip()
+            ts = m.get("ts") or ""
+            ts_suffix = f"  ({ts})" if ts else ""
+            parts.append(f"  [{i}] {sender}{ts_suffix}: {text}")
+
+    parts.append("\nMost recent incoming message to reply to:")
+    parts.append(incoming_message.strip())
+    parts.append("\nDraft the LinkedIn DM reply now. Output the reply text only.")
+
+    user_prompt = "\n".join(parts)
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": LINKEDIN_REPLY_SYSTEM_PROMPT},
+                {"role": "user",   "content": user_prompt},
+            ],
+            temperature=0.6,
+            max_tokens=400,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error generating LinkedIn AI reply: {e}")
+        return f"[Error generating LinkedIn reply: {e}]"

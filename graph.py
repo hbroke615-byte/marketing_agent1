@@ -244,10 +244,11 @@ class Graph:
                         "receivedDateTime": email.get('receivedDateTime', '')
                     })
             
-            # Sort by receivedDateTime descending, grab top 5, then reverse to chronological order
-            history.sort(key=lambda x: x["receivedDateTime"], reverse=True)
-            history = history[:5]
-            return history[::-1]
+            # Return the full thread in chronological order. No artificial cap
+            # — campaign reply drafting needs every prior message (including the
+            # original campaign send) so the AI has full context.
+            history.sort(key=lambda x: x["receivedDateTime"])
+            return history
         else:
             print(f"❌ Error fetching history ({response.status_code}): {response.text[:800]}")
             return []

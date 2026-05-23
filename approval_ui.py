@@ -11,8 +11,8 @@ import re
 from marketing_campaign_agent import get_marketing_system_prompt, set_marketing_system_prompt, generate_campaign_from_text
 import send_dm
 
-APPROVAL_HOST = "127.0.0.1"
-APPROVAL_PORT = 8787
+APPROVAL_HOST = os.environ.get("APPROVAL_HOST", "127.0.0.1")
+APPROVAL_PORT = int(os.environ.get("PORT", os.environ.get("APPROVAL_PORT", 8787)))
 APPROVAL_URL = f"http://{APPROVAL_HOST}:{APPROVAL_PORT}"
 
 _SERVER = None
@@ -29,6 +29,213 @@ _STATS = {
     "recent_inbox_sample": None,
     "stats_updated_at": None,
 }
+
+_APOLLO_CAMPAIGN_JOBS = {}
+_APOLLO_CAMPAIGN_JOBS_LOCK = threading.Lock()
+
+# Disk-backed persistence so the Marketing Agent's "Campaign History Feed"
+# survives page refreshes AND process restarts (same model as
+# apollo_contacts.json for the CRM tab).
+MARKETING_CAMPAIGNS_FILE = "marketing_campaigns.json"
+
+
+def _load_marketing_campaigns_from_disk():
+    """Populate _APOLLO_CAMPAIGN_JOBS from marketing_campaigns.json on startup.
+    Idempotent — safe to call multiple times. Missing/invalid file = no-op."""
+    if not os.path.isfile(MARKETING_CAMPAIGNS_FILE):
+        return
+    try:
+        with open(MARKETING_CAMPAIGNS_FILE, "r", encoding="utf-8") as f:
+            saved = json.load(f) or []
+    except Exception as e:
+        print(f"Could not load {MARKETING_CAMPAIGNS_FILE}: {e}")
+        return
+    if not isinstance(saved, list):
+        return
+    with _APOLLO_CAMPAIGN_JOBS_LOCK:
+        for job in saved:
+            job_id = (job or {}).get("job_id")
+            if not job_id:
+                continue
+            # Demote any 'running' state from a previous process — that thread
+            # is gone now so the job will never advance. Mark it as error so
+            # the UI shows it's stuck rather than spinning forever.
+            if job.get("status") == "running":
+                job["status"] = "error"
+                job["error"] = "Process restarted while this campaign was running. Please re-run."
+            _APOLLO_CAMPAIGN_JOBS[job_id] = {k: v for k, v in job.items() if k != "job_id"}
+
+
+def _save_marketing_campaigns_to_disk():
+    """Snapshot the current in-memory jobs dict to disk. Called after every
+    update() in the campaign workers so the file stays current."""
+    try:
+        with _APOLLO_CAMPAIGN_JOBS_LOCK:
+            payload = [
+                {"job_id": jid, **job}
+                for jid, job in _APOLLO_CAMPAIGN_JOBS.items()
+            ]
+        with open(MARKETING_CAMPAIGNS_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Could not save {MARKETING_CAMPAIGNS_FILE}: {e}")
+
+_SEND_ALL_JOBS = {}
+_SEND_ALL_JOBS_LOCK = threading.Lock()
+
+# Separate approval queue for LinkedIn DM replies. Same shape as _ITEMS but
+# the send-channel is Playwright (send_dm.send_dm) instead of Graph send_reply.
+_LINKEDIN_ITEMS = {}
+_LINKEDIN_ITEMS_LOCK = threading.Lock()
+
+
+def _run_send_all_job(job_id):
+    """Background thread: generate + send personalised campaign to every unsent lead."""
+    import apollo_agent
+
+    def update(**kwargs):
+        with _SEND_ALL_JOBS_LOCK:
+            _SEND_ALL_JOBS[job_id].update(kwargs)
+
+    def on_log(entry):
+        with _SEND_ALL_JOBS_LOCK:
+            _SEND_ALL_JOBS[job_id]["logs"].append(entry)
+
+    try:
+        result = apollo_agent.send_campaign_to_all(on_log=on_log)
+        if "error" in result:
+            update(status="error", error=result["error"])
+        else:
+            update(status="done", total=result["total"], sent=result["sent"], failed=result["failed"])
+    except Exception as e:
+        print(f"[Send-All Job {job_id}] Unhandled error: {e}")
+        update(status="error", error=str(e))
+
+
+def _run_apollo_campaign_job(job_id, description, keyword, roles, fetch_count):
+    """Phase 1: generate LinkedIn message + fetch leads via Apify, then stop at preview_ready.
+    Sending is deferred until the user clicks "Send Campaign" (handled by
+    _run_apollo_campaign_send_job)."""
+    def update(**kwargs):
+        with _APOLLO_CAMPAIGN_JOBS_LOCK:
+            _APOLLO_CAMPAIGN_JOBS[job_id].update(kwargs)
+        _save_marketing_campaigns_to_disk()
+
+    try:
+        update(progress_msg="Generating LinkedIn campaign message...")
+        result = generate_campaign_from_text(description)
+        if not result or not getattr(result, "linkedin_message", None):
+            update(status="error", error="Could not generate campaign — description not recognized as a marketing product")
+            return
+        message = result.linkedin_message
+
+        update(progress_msg="Fetching leads via Apify...")
+        import apollo_agent
+        apollo_agent.fetch_linkedin_contacts(fetch_count=fetch_count, keyword=keyword, roles=roles)
+
+        # Read Marketing-Agent contacts from the separate marketing_contacts.json.
+        # Exclude anyone already DM'd ("Sent") or who's already replied
+        # ("Replied") — re-DMing them is spammy and damages account standing.
+        # Only contacts in the "Lead Fetched" (or any other) state are eligible.
+        contacts = apollo_agent.load_marketing_contacts()
+        all_with_linkedin   = [c for c in contacts if c.get("linkedin")]
+        linkedin_contacts   = [c for c in all_with_linkedin
+                               if c.get("status") not in ("Sent", "Replied")]
+        skipped             = len(all_with_linkedin) - len(linkedin_contacts)
+        total               = len(linkedin_contacts)
+
+        msg = f"Preview ready — {total} new LinkedIn contact(s) to DM"
+        if skipped:
+            msg += f" ({skipped} already DM'd, skipped)"
+
+        update(
+            status="preview_ready",
+            progress_msg=msg,
+            message=message,
+            total=total,
+            linkedin_contacts=linkedin_contacts,
+        )
+        print(f"[Marketing Apollo Job {job_id}] {msg}")
+
+    except Exception as e:
+        print(f"[Marketing Apollo Job {job_id}] Unhandled error: {e}")
+        update(status="error", error=str(e))
+
+
+def _run_apollo_campaign_send_job(job_id, message_override=None):
+    """Phase 2: send LinkedIn DMs to every contact saved on the job during Phase 1."""
+    def update(**kwargs):
+        with _APOLLO_CAMPAIGN_JOBS_LOCK:
+            _APOLLO_CAMPAIGN_JOBS[job_id].update(kwargs)
+        _save_marketing_campaigns_to_disk()
+
+    try:
+        with _APOLLO_CAMPAIGN_JOBS_LOCK:
+            job = _APOLLO_CAMPAIGN_JOBS.get(job_id, {})
+            linkedin_contacts = list(job.get("linkedin_contacts") or [])
+            stored_message = job.get("message") or ""
+
+        message = (message_override or stored_message or "").strip()
+        if not message:
+            update(status="error", error="No campaign message to send")
+            return
+
+        total = len(linkedin_contacts)
+        update(
+            status="running",
+            progress_msg=f"Sending LinkedIn DMs to {total} contact(s)...",
+            message=message,
+            total=total,
+            sent=0,
+            failed=0,
+            results=[],
+        )
+
+        results = []
+        sent_count = 0
+        failed_count = 0
+
+        import apollo_agent
+        from datetime import datetime, timezone
+
+        for i, contact in enumerate(linkedin_contacts):
+            url = contact["linkedin"]
+            name = contact.get("name", "Unknown")
+            update(progress_msg=f"Sending DM {i + 1}/{total}: {name}...")
+            try:
+                success = send_dm.send_dm(message, profile_url=url)
+            except Exception as e:
+                print(f"[Marketing Apollo Send Job] DM error for {name}: {e}")
+                success = False
+            results.append({"name": name, "linkedin": url, "sent": success})
+            if success:
+                sent_count += 1
+                # Mark this person as DM'd so the LinkedIn Pipeline can recognise
+                # their reply later. We store the message we sent on the contact
+                # so the approval card has the original-campaign context.
+                try:
+                    fresh = apollo_agent.load_marketing_contacts()
+                    needle = (url or "").lower().rstrip("/")
+                    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    for c in fresh:
+                        if (c.get("linkedin") or "").lower().rstrip("/") == needle:
+                            c["status"] = "Sent"
+                            c["draft"] = message
+                            c["sent_at"] = ts
+                            break
+                    apollo_agent.save_marketing_contacts(fresh)
+                except Exception as e:
+                    print(f"[Marketing Apollo Send Job] Could not update marketing_contacts status for {url}: {e}")
+            else:
+                failed_count += 1
+            update(sent=sent_count, failed=failed_count, results=list(results))
+
+        update(status="done", message=message, total=total, sent=sent_count, failed=failed_count, results=results)
+        print(f"[Marketing Apollo Send Job {job_id}] Done — sent {sent_count}/{total}")
+
+    except Exception as e:
+        print(f"[Marketing Apollo Send Job {job_id}] Unhandled error: {e}")
+        update(status="error", error=str(e))
 
 
 def update_inbox_stats(unread_count, recent_fetched_count):
@@ -654,10 +861,11 @@ HTML_PAGE = """
 <body>
   <header>
     <div class="top-nav">
-      <button class="nav-tab active" data-target="dashboard-view">Pipeline</button>
+      <button class="nav-tab active" data-target="dashboard-view">Email Pipeline</button>
+      <button class="nav-tab" data-target="linkedin-pipeline-view">LinkedIn Pipeline</button>
       <!--<button class="nav-tab">Scorecard</button>-->
-      <button class="nav-tab" data-target="marketing-view">Marketing Agent</button>
-      <button class="nav-tab" data-target="apollo-view">Apollo CRM</button>
+      <button class="nav-tab" data-target="marketing-view">LinkedIn Agent</button>
+      <button class="nav-tab" data-target="apollo-view">Email Agent</button>
     </div>
   </header>
 
@@ -745,6 +953,42 @@ HTML_PAGE = """
       </div>
     </div>
 
+    <!-- LinkedIn Pipeline View -->
+    <div id="linkedin-pipeline-view" class="view-content">
+      <section class="stats-grid" id="linkedin-stats-container" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="stat-tile">
+          <div class="stat-label">DMs Sent (Marketing Agent)</div>
+          <div class="stat-value" id="li-stat-sent">0</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Replied</div>
+          <div class="stat-value" id="li-stat-replied">0</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Pending Approval</div>
+          <div class="stat-value" id="li-stat-queue">0</div>
+        </div>
+      </section>
+
+      <div class="dashboard-content">
+        <div class="column">
+          <div class="column-header">
+            <div class="column-title">LinkedIn Replies</div>
+            <div class="column-count" id="linkedin-pipeline-count">0 Items</div>
+          </div>
+          <div class="item-list" id="linkedin-pipeline-list"></div>
+        </div>
+
+        <div class="column">
+          <div class="column-header">
+            <div class="column-title">LinkedIn Human Approval Queue</div>
+            <div class="column-count" id="linkedin-approval-count">0 Pending</div>
+          </div>
+          <div class="item-list" id="linkedin-approval-list"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Marketing/Prompt View -->
     <div id="marketing-view" class="view-content">
       <div class="marketing-container">
@@ -758,9 +1002,20 @@ HTML_PAGE = """
                 <label class="input-label">Product Description</label>
                 <textarea id="manual-marketing-description" placeholder="Describe the product..." style="min-height: 120px;"></textarea>
                 
-                <label class="input-label" style="margin-top: 10px;">Target LinkedIn URL</label>
-                <input type="text" id="manual-marketing-url" placeholder="Paste LinkedIn profile link here..." style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: #fff; margin-bottom: 15px; width: 100%; box-sizing: border-box;">
-                
+                <label class="input-label" style="margin-top: 10px;"> Search Keyword</label>
+                <input type="text" id="apollo-mkt-keyword" placeholder="Domain keyword (e.g. hospitals)" value="hospitals, Community Hospital, Surgical Center, Emergency Care, Urgent Care, Trauma Center, Rehabilitation Center, Cancer Center, Heart Institute, Children's Hospital, Pharma, Biotech, Biotechnology, Life Sciences, Drug Manufacturer, Medicine Manufacturer, Generic Medicines, Vaccine Manufacturer, Clinical Research, CRO, Drug Discovery, Medical Research, Healthcare Products, Therapeutics, API Manufacturer, Formulation Company, OTC Medicines, Specialty Pharma, Biosciences, HealthTech, MedTech, Telemedicine, Digital Health, Diagnostics, Laboratory, Pathology, Radiology, Medical Devices, Medical Equipment, Imaging Center, Blood Bank, Nursing Care, Home Healthcare, Wellness Center, Kaiser Permanente, Mayo Clinic, Cleveland Clinic, HCA Healthcare, Tenet Healthcare, Ascension, CommonSpirit Health, Providence, pharmaceutical, Medical Center, Healthcare Center, Clinic Healthcare System, Medical Institute, Specialty Hospital, Multispecialty Hospital, Private Hospital, Government Hospital" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; margin-bottom: 8px; width: 100%; box-sizing: border-box;">
+
+                <label class="input-label">Target Roles (comma-separated)</label>
+                <input type="text" id="apollo-mkt-roles" placeholder="Director of Pharmacy, VP of Pharmacy..." value="Director of Pharmacy, VP of Pharmacy, Chief Pharmacy, System Pharmacy Operations leaders, Sterile Compounding Manager, Pharmacy Purchasing, Procurement Officer, CPO, Medication Safety Officer, Supply Chain leadership" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; margin-bottom: 8px; width: 100%; box-sizing: border-box;">
+
+                <div style="margin-bottom:15px;">
+                  <label class="input-label">Fetch Count</label>
+                  <input type="number" id="apollo-mkt-fetch-count" value="10" min="1" max="10000" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; width: 100%; box-sizing: border-box;">
+                  <div style="font-size: 0.7rem; color: var(--muted); margin-top: 4px;">
+                    Max LinkedIn contacts to fetch via Apify for this campaign.
+                  </div>
+                </div>
+
                 <button id="generate-manual-marketing" class="btn btn-primary" style="width: 100%;">
                   Generate Campaign
                 </button>
@@ -768,7 +1023,7 @@ HTML_PAGE = """
             </div>
 
             <div class="marketing-section glass-card">
-              <h2><i class="fas fa-cog"></i> Settings</h2>
+              <h2><i class="fas fa-cog"></i> Linkedin System prompt</h2>
               <p>Adjust the AI's core persona and rules.</p>
               <div class="approval-form">
                 <textarea id="marketing-prompt-textarea" placeholder="System prompt..." style="min-height: 150px; font-size: 0.8rem;"></textarea>
@@ -821,24 +1076,21 @@ HTML_PAGE = """
           <!-- Sidebar: Control Panel -->
           <div class="apollo-sidebar">
             <div class="marketing-section glass-card">
-              <h2><i class="fas fa-search"></i> Apollo Lead Finder</h2>
+              <h2><i class="fas fa-search"></i>  Lead Finder</h2>
               <p>Search and enrich targets matching your ideal pharmaceutical profile.</p>
               
               <div class="approval-form">
                 <label class="input-label">Domain Keywords</label>
-                <input type="text" id="apollo-keyword" value="pharmaceutical" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; width: 100%; box-sizing: border-box; font-size: 0.85rem; margin-bottom: 10px;">
+                <input type="text" id="apollo-keyword" value="hospitals, Community Hospital, Surgical Center, Emergency Care, Urgent Care, Trauma Center, Rehabilitation Center, Cancer Center, Heart Institute, Children's Hospital, Pharma, Biotech, Biotechnology, Life Sciences, Drug Manufacturer, Medicine Manufacturer, Generic Medicines, Vaccine Manufacturer, Clinical Research, CRO, Drug Discovery, Medical Research, Healthcare Products, Therapeutics, API Manufacturer, Formulation Company, OTC Medicines, Specialty Pharma, Biosciences, HealthTech, MedTech, Telemedicine, Digital Health, Diagnostics, Laboratory, Pathology, Radiology, Medical Devices, Medical Equipment, Imaging Center, Blood Bank, Nursing Care, Home Healthcare, Wellness Center, Kaiser Permanente, Mayo Clinic, Cleveland Clinic, HCA Healthcare, Tenet Healthcare, Ascension, CommonSpirit Health, Providence, pharmaceutical, Medical Center, Healthcare Center, Clinic Healthcare System, Medical Institute, Specialty Hospital, Multispecialty Hospital, Private Hospital, Government Hospital" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; width: 100%; box-sizing: border-box; font-size: 0.85rem; margin-bottom: 10px;">
                 
                 <label class="input-label">Target Roles (comma-separated)</label>
-                <textarea id="apollo-roles" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: #fff; font-size: 0.8rem; width: 100%; box-sizing: border-box; min-height: 100px; line-height: 1.4; resize: vertical; margin-bottom: 10px;">Procurement Manager, Business Development, Supply Chain Manager, Purchasing Manager, Sourcing Manager</textarea>
+                <textarea id="apollo-roles" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: #fff; font-size: 0.8rem; width: 100%; box-sizing: border-box; min-height: 100px; line-height: 1.4; resize: vertical; margin-bottom: 10px;">Director of Pharmacy, VP of Pharmacy, Chief Pharmacy, System Pharmacy Operations leaders, Sterile Compounding Manager, Pharmacy Purchasing, Procurement Officer, CPO, Medication Safety Officer, Supply Chain leadership</textarea>
                 
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                  <div style="flex: 1;">
-                    <label class="input-label">Pages</label>
-                    <input type="number" id="apollo-max-pages" value="1" min="1" max="10" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; width: 100%; box-sizing: border-box;">
-                  </div>
-                  <div style="flex: 1;">
-                    <label class="input-label">Per Page</label>
-                    <input type="number" id="apollo-per-page" value="10" min="5" max="100" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; width: 100%; box-sizing: border-box;">
+                <div style="margin-top: 10px;">
+                  <label class="input-label">Fetch Count</label>
+                  <input type="number" id="apollo-fetch-count" value="100" min="1" max="10000" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: #fff; width: 100%; box-sizing: border-box;">
+                  <div style="font-size: 0.7rem; color: var(--muted); margin-top: 4px;">
+                    Max number of leads Apify will return for this run.
                   </div>
                 </div>
 
@@ -850,7 +1102,7 @@ HTML_PAGE = """
             </div>
 
             <div class="marketing-section glass-card">
-              <h2><i class="fas fa-cog"></i> Apollo System Prompt</h2>
+              <h2><i class="fas fa-cog"></i>  System Prompt</h2>
               <p>Adjust the AI prompt rules for personalized pharmaceutical outreaches.</p>
               <div class="approval-form">
                 <textarea id="apollo-prompt-textarea" placeholder="Apollo Campaign Prompt..." style="min-height: 280px; font-size: 0.8rem; width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: #fff; line-height: 1.4; resize: vertical;"></textarea>
@@ -868,7 +1120,63 @@ HTML_PAGE = """
               <div class="column-title">Apollo Prospect Database</div>
               <div class="column-count" id="apollo-contacts-count">0 Leads</div>
             </div>
-            
+
+            <!-- Campaign Preview Panel — shown after "Find & Enrich Leads" -->
+            <div id="campaign-preview-panel" style="display:none; margin-bottom:20px;">
+              <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px;">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">
+                  <div>
+                    <div style="font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);">
+                      <i class="fas fa-eye" style="color:var(--accent); margin-right:6px;"></i>Campaign Preview
+                    </div>
+                    <div id="preview-lead-count" style="font-size:0.78rem; color:var(--muted); margin-top:3px;"></div>
+                  </div>
+                  <button id="regenerate-preview-btn" class="btn btn-secondary btn-sm" style="font-size:0.74rem;">
+                    <i class="fas fa-sync"></i> Regenerate
+                  </button>
+                </div>
+
+                <div id="preview-loading" style="text-align:center; padding:28px 0; color:var(--muted);">
+                  <i class="fas fa-spinner fa-spin" style="font-size:1.4rem; display:block; margin-bottom:10px;"></i>
+                  <span style="font-size:0.84rem;">Generating campaign preview…</span>
+                </div>
+
+                <div id="preview-content" style="display:none;">
+                  <div style="margin-bottom:12px;">
+                    <label class="input-label">Subject Line</label>
+                    <input type="text" id="preview-subject"
+                      style="margin-top:4px; width:100%; box-sizing:border-box; background:#0d1117; border:1px solid var(--border); border-radius:6px; padding:10px; color:#fff; font-size:0.9rem; font-weight:600;">
+                  </div>
+                  <div>
+                    <label class="input-label">Email Body</label>
+                    <textarea id="preview-body" style="margin-top:4px; min-height:220px; font-size:0.84rem; line-height:1.55;"></textarea>
+                  </div>
+                  <div style="margin-top:12px; padding:9px 12px; background:rgba(47,129,247,.05); border:1px solid rgba(47,129,247,.15); border-radius:6px; font-size:0.74rem; color:var(--muted);">
+                    <i class="fas fa-info-circle" style="color:var(--accent); margin-right:6px;"></i>
+                    Sample personalised for one contact. Each lead will receive a uniquely AI-generated email when you send.
+                  </div>
+                  <div style="margin-top:16px;">
+                    <button id="send-all-btn" class="btn btn-primary" style="width:100%; font-size:0.9rem; padding:11px 16px;">
+                      <i class="fas fa-paper-plane"></i>&nbsp; <span id="send-all-btn-label">Send Campaign to All Leads</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Live send logs (shown once Send is clicked) -->
+                <div id="send-all-logs-section" style="display:none; margin-top:18px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:7px;">
+                    <label class="input-label">Send Progress</label>
+                    <span id="send-all-summary" style="font-size:0.74rem; color:var(--muted);"></span>
+                  </div>
+                  <div id="send-all-log-output"
+                    style="background:#0d1117; border:1px solid var(--border); border-radius:6px; padding:12px;
+                           font-family:monospace; font-size:0.72rem; max-height:260px; overflow-y:auto; line-height:1.9;"></div>
+                </div>
+
+              </div>
+            </div>
+
             <div id="apollo-contacts-list" style="display: flex; flex-direction: column; gap: 15px;">
               <!-- Lead Cards go here -->
               <div id="apollo-empty-state" style="text-align: center; padding: 60px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
@@ -901,7 +1209,10 @@ HTML_PAGE = """
         document.querySelectorAll(".view-content").forEach(v => v.classList.remove("active"));
         tab.classList.add("active");
         document.getElementById(tab.dataset.target).classList.add("active");
-        if (tab.dataset.target === "marketing-view") loadMarketingPrompt();
+        if (tab.dataset.target === "marketing-view") {
+          loadMarketingPrompt();
+          loadMarketingHistory();
+        }
         if (tab.dataset.target === "apollo-view") {
           loadApolloContacts();
           loadApolloPrompt();
@@ -932,11 +1243,29 @@ HTML_PAGE = """
     }
 
     function createApprovalCard(item) {
+      // Optional "Your original campaign" panel — only shown when the inbound
+      // is a reply to an Apollo CRM campaign (original_campaign is populated).
+      let originalCampaignHtml = "";
+      if (item.original_campaign && (item.original_campaign.subject || item.original_campaign.body)) {
+        const oc = item.original_campaign;
+        const recipient = oc.name ? `${oc.name}${oc.company ? ' · ' + oc.company : ''}` : (oc.company || '');
+        originalCampaignHtml = `
+          <div class="input-label" style="display:flex; align-items:center; gap:6px;">
+            <i class="fas fa-paper-plane" style="color:var(--accent);"></i>
+            Your original campaign${recipient ? ' → ' + escapeHtml(recipient) : ''}
+          </div>
+          <div class="msg-box" style="border-left:3px solid var(--accent);">
+            <div style="font-weight:600; margin-bottom:6px; color:var(--accent);">${escapeHtml(oc.subject || '(no subject)')}</div>
+            <div style="white-space:pre-wrap;">${escapeHtml(oc.body || '')}</div>
+          </div>
+        `;
+      }
       return `
         <div class="item-card approval" data-id="${item.id}">
           <div class="item-name">${escapeHtml(item.sender)}</div>
           <div class="item-sub">${escapeHtml(item.subject)}</div>
           <div class="approval-form">
+            ${originalCampaignHtml}
             <div class="input-label">Incoming Message</div>
             <div class="msg-box">${escapeHtml(item.body)}</div>
             <div class="input-label">AI Draft Response</div>
@@ -1011,6 +1340,41 @@ HTML_PAGE = """
       } catch (e) {}
     }
 
+    // Restore the campaign history feed from the server on every refresh /
+    // tab activation. Avoids tearing existing live polling — only the
+    // not-already-rendered campaigns are added.
+    async function loadMarketingHistory() {
+      try {
+        const res = await fetch("/api/marketing/campaigns");
+        if (!res.ok) return;
+        const data = await res.json();
+        const campaigns = data.campaigns || [];
+        const existingIds = new Set(
+          [...campaignHistoryFeed.querySelectorAll(".campaign-card")]
+            .map(c => c.dataset.jobId)
+            .filter(Boolean)
+        );
+        if (campaigns.length > 0 && feedEmptyState) {
+          feedEmptyState.style.display = "none";
+        }
+        // Server returns newest-first; prepend in reverse so the newest stays on top.
+        for (const job of [...campaigns].reverse()) {
+          if (existingIds.has(job.job_id)) continue;
+          const card = createApolloCampaignCard();
+          card.dataset.jobId = job.job_id;
+          campaignHistoryFeed.prepend(card);
+          updateApolloCampaignCard(card, job);
+          // If we just inflated a still-running job, attach a poller so it
+          // continues updating until it finishes.
+          if (job.status === "running") {
+            startMarketingPoll(job.job_id, card);
+          }
+        }
+      } catch (e) {
+        console.error("loadMarketingHistory:", e);
+      }
+    }
+
     saveMarketingBtn.addEventListener("click", async () => {
       saveMarketingBtn.disabled = true;
       marketingStatus.textContent = "Saving...";
@@ -1037,131 +1401,233 @@ HTML_PAGE = """
       }
     });
 
-    const manualMarketingUrl = document.getElementById("manual-marketing-url");
     const campaignHistoryFeed = document.getElementById("campaign-history-feed");
     const feedEmptyState = document.getElementById("feed-empty-state");
+    let _activePoll = null;
 
-    function createCampaignCard(text, url) {
-      const id = "camp-" + Date.now();
+    function createApolloCampaignCard() {
       const card = document.createElement("div");
       card.className = "campaign-card glass-card";
-      card.id = id;
-      const targetLabel = `Target: <strong style="color:var(--accent)">${url.split('/').filter(p=>p).pop()}</strong>`;
-      
       card.innerHTML = `
         <div class="card-header">
-          <span class="card-tag">Pending Review</span>
-          <span style="font-size: 0.75rem; color: #888;">${targetLabel}</span>
-          <input type="hidden" class="card-url" value="${escapeHtml(url || '')}">
+          <span class="card-tag">Apollo Campaign</span>
+          <span class="card-progress" style="font-size:0.75rem; color:#888;">Starting...</span>
         </div>
-        <textarea style="min-height: 200px;">${escapeHtml(text)}</textarea>
-        <div class="button-row">
-          <button class="btn btn-primary btn-sm send-btn" onclick="sendCampaign('${id}')">
-            <i class="fas fa-paper-plane"></i> Send
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="cancelCampaign('${id}')">
-            <i class="fas fa-times"></i> Discard
-          </button>
+        <div class="card-body-content" style="text-align:center; padding:24px; color:var(--muted);">
+          <i class="fas fa-spinner fa-spin" style="font-size:1.5rem; margin-bottom:10px;"></i>
+          <p style="margin:0; font-size:0.9rem;">Fetching Apollo leads & generating campaign…</p>
         </div>
-        <div class="card-error status-msg error" style="display:none; margin-top:10px;"></div>
       `;
       return card;
     }
 
-    async function sendCampaign(cardId) {
-      const card = document.getElementById(cardId);
-      const text = card.querySelector("textarea").value;
-      const url = card.querySelector(".card-url").value;
-      const btn = card.querySelector(".send-btn");
-      const tag = card.querySelector(".card-tag");
-      const cardError = card.querySelector(".card-error");
-      
-      btn.disabled = true;
-      tag.textContent = "⌛ Sending...";
-      cardError.style.display = "none";
-      
-      try {
-        const res = await fetch("/api/send-manual-marketing", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, profile_url: url })
-        });
-        if (res.ok) {
-          tag.textContent = "✓ Sent";
-          card.classList.add("sent");
-          card.querySelector(".button-row").style.display = "none";
-          card.querySelector("textarea").disabled = true;
-        } else {
-          const data = await res.json();
-          cardError.textContent = "Failed to send: " + (data.error || "Unknown error");
-          cardError.style.display = "block";
-          btn.disabled = false;
-          tag.textContent = "❌ Failed";
+    function updateApolloCampaignCard(card, job) {
+      const progressEl = card.querySelector(".card-progress");
+      const bodyEl = card.querySelector(".card-body-content");
+      const tagEl = card.querySelector(".card-tag");
+      const phase = card.dataset.phase || "";
+
+      if (job.status === "running") {
+        if (progressEl) progressEl.textContent = job.progress_msg || "Processing…";
+
+        // If we just transitioned from preview_ready → running, swap the body
+        // into a live "sending" view so the user can watch DMs go out.
+        if (phase === "preview") {
+          card.dataset.phase = "sending";
+          tagEl.textContent = "Sending…";
+          bodyEl.innerHTML = `
+            <div style="margin-bottom:12px;">
+              <label class="input-label" style="display:block; margin-bottom:6px;">Sending LinkedIn Campaign</label>
+              <textarea readonly style="min-height:120px;">${escapeHtml(job.message || "")}</textarea>
+            </div>
+            <div class="live-progress" style="font-size:0.85rem; color:var(--muted); padding:8px 0;">
+              <i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>
+              <span class="live-progress-text">${escapeHtml(job.progress_msg || "Sending…")}</span>
+            </div>
+            <div class="live-summary" style="font-size:0.78rem; color:var(--muted); padding-top:4px; border-top:1px solid var(--border);">
+              Sent ${job.sent || 0} · Failed ${job.failed || 0} of ${job.total || 0}
+            </div>
+          `;
+        } else if (phase === "sending") {
+          const lp = card.querySelector(".live-progress-text");
+          if (lp) lp.textContent = job.progress_msg || "Sending…";
+          const ls = card.querySelector(".live-summary");
+          if (ls) ls.textContent = `Sent ${job.sent || 0} · Failed ${job.failed || 0} of ${job.total || 0}`;
         }
-      } catch (e) {
-        cardError.textContent = "Network error";
-        cardError.style.display = "block";
-        btn.disabled = false;
-        tag.textContent = "❌ Error";
+        return;
       }
+
+      if (job.status === "preview_ready") {
+        card.dataset.phase = "preview";
+        tagEl.textContent = "Preview";
+        if (progressEl) progressEl.textContent = `${job.total || 0} contact(s)`;
+        const total = job.total || 0;
+        bodyEl.innerHTML = `
+          <div style="margin-bottom:14px;">
+            <label class="input-label" style="display:block; margin-bottom:6px;">Generated LinkedIn Message (editable)</label>
+            <textarea class="preview-message" style="min-height:160px;">${escapeHtml(job.message || "")}</textarea>
+          </div>
+          <div style="margin-top:12px; padding:9px 12px; background:rgba(47,129,247,.05); border:1px solid rgba(47,129,247,.15); border-radius:6px; font-size:0.74rem; color:var(--muted);">
+            <i class="fas fa-info-circle" style="color:var(--accent); margin-right:6px;"></i>
+            Preview ready — review/edit the message above. Click below to send to <strong>${total}</strong> LinkedIn contact(s).
+          </div>
+          <div style="margin-top:14px;">
+            <button class="btn btn-primary send-preview-btn" ${total === 0 ? "disabled" : ""} style="width:100%;">
+              <i class="fas fa-paper-plane"></i>&nbsp; Send Campaign to All ${total} Contact(s)
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      if (job.status === "error") {
+        tagEl.textContent = "❌ Error";
+        if (progressEl) progressEl.textContent = "";
+        bodyEl.innerHTML = `<div style="color:var(--danger); padding:12px; font-size:0.9rem;">${escapeHtml(job.error || "An error occurred")}</div>`;
+        card.style.borderLeftColor = "var(--danger)";
+        return;
+      }
+
+      // done
+      card.dataset.phase = "done";
+      const results = job.results || [];
+      const message = job.message || "";
+      const sent = job.sent || 0;
+      const total = job.total || 0;
+
+      tagEl.textContent = sent > 0 ? "✓ Sent" : "Done";
+      if (progressEl) progressEl.textContent = `${sent}/${total} sent`;
+      if (sent > 0) card.classList.add("sent");
+
+      const rowsHtml = results.map(r => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:0.85rem; font-weight:600; color:#fff;">${escapeHtml(r.name)}</div>
+            <a href="${escapeHtml(r.linkedin)}" target="_blank" style="font-size:0.75rem; color:var(--accent); text-decoration:none; word-break:break-all;">${escapeHtml(r.linkedin)}</a>
+          </div>
+          <span style="flex-shrink:0; margin-left:12px; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:4px;
+            background:${r.sent ? 'rgba(35,134,54,0.15)' : 'rgba(218,54,51,0.15)'};
+            color:${r.sent ? 'var(--success)' : 'var(--danger)'}; border:1px solid ${r.sent ? 'rgba(35,134,54,0.3)' : 'rgba(218,54,51,0.3)'};">
+            ${r.sent ? '✓ Sent' : '✗ Failed'}
+          </span>
+        </div>
+      `).join('');
+
+      bodyEl.innerHTML = `
+        <div style="margin-bottom:14px;">
+          <label class="input-label" style="display:block; margin-bottom:6px;">Generated LinkedIn Message</label>
+          <textarea style="min-height:140px;" readonly>${escapeHtml(message)}</textarea>
+        </div>
+        <div>
+          <label class="input-label" style="display:block; margin-bottom:8px;">LinkedIn DM Results (${total} contacts)</label>
+          ${rowsHtml || '<div style="color:var(--muted); font-size:0.85rem; padding:12px 0;">No LinkedIn contacts found with valid profiles.</div>'}
+        </div>
+      `;
     }
 
-    function cancelCampaign(cardId) {
-      const card = document.getElementById(cardId);
-      card.classList.add("cancelled");
-      card.querySelector(".card-tag").textContent = "Cancelled";
-      card.querySelector(".button-row").style.display = "none";
-      card.querySelector("textarea").disabled = true;
-      setTimeout(() => {
-        card.style.opacity = "0.4";
-      }, 500);
+    function startMarketingPoll(jobId, card) {
+      if (_activePoll) clearInterval(_activePoll);
+      _activePoll = setInterval(async () => {
+        try {
+          const sRes = await fetch("/api/marketing/apollo-campaign/status?job_id=" + jobId);
+          const job = await sRes.json();
+          updateApolloCampaignCard(card, job);
+          manualMarketingStatus.textContent = "⌛ " + (job.progress_msg || "Processing…");
+          manualMarketingStatus.style.display = "block";
+          if (job.status !== "running") {
+            clearInterval(_activePoll);
+            _activePoll = null;
+            manualMarketingStatus.style.display = "none";
+            generateManualMarketingBtn.disabled = false;
+          }
+        } catch (e) { console.error("Poll error:", e); }
+      }, 3000);
     }
+
+    // Delegated handler: when user clicks "Send Campaign to All …" inside a preview card
+    campaignHistoryFeed.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".send-preview-btn");
+      if (!btn) return;
+      const card = btn.closest(".campaign-card");
+      if (!card) return;
+      const jobId = card.dataset.jobId;
+      if (!jobId) return;
+      const msgEl = card.querySelector(".preview-message");
+      const message = (msgEl && msgEl.value) || "";
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting send…';
+
+      try {
+        const res = await fetch("/api/marketing/apollo-campaign/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: jobId, message })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-paper-plane"></i>&nbsp; Retry Send';
+          manualMarketingStatus.textContent = "✗ " + (data.error || "Failed to start send");
+          manualMarketingStatus.className = "status-msg error";
+          manualMarketingStatus.style.display = "block";
+          return;
+        }
+        generateManualMarketingBtn.disabled = true;
+        startMarketingPoll(jobId, card);
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i>&nbsp; Retry Send';
+        manualMarketingStatus.textContent = "✗ Network error during send";
+        manualMarketingStatus.className = "status-msg error";
+        manualMarketingStatus.style.display = "block";
+      }
+    });
 
     generateManualMarketingBtn.addEventListener("click", async () => {
       const description = manualMarketingDescription.value.trim();
-      const url = manualMarketingUrl.value.trim();
-      
       if (!description) {
         manualMarketingStatus.textContent = "✗ Please enter a product description";
         manualMarketingStatus.className = "status-msg error";
         manualMarketingStatus.style.display = "block";
         return;
       }
-      if (!url) {
-        manualMarketingStatus.textContent = "✗ Please enter a LinkedIn Profile URL";
-        manualMarketingStatus.className = "status-msg error";
-        manualMarketingStatus.style.display = "block";
-        return;
-      }
+
+      const keyword = (document.getElementById("apollo-mkt-keyword").value || "hospitals").trim();
+      const roles = document.getElementById("apollo-mkt-roles").value.trim();
+      const fetchCount = parseInt(document.getElementById("apollo-mkt-fetch-count").value) || 10;
 
       generateManualMarketingBtn.disabled = true;
-      manualMarketingStatus.textContent = "⌛ Generating message...";
+      manualMarketingStatus.textContent = "⌛ Starting Apify fetch & campaign…";
       manualMarketingStatus.className = "status-msg";
       manualMarketingStatus.style.display = "block";
 
       try {
-        const res = await fetch("/api/manual-marketing", {
+        const res = await fetch("/api/marketing/apollo-campaign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ description })
+          body: JSON.stringify({ description, keyword, roles, fetch_count: fetchCount })
         });
         const data = await res.json();
-        if (res.ok) {
-          manualMarketingStatus.style.display = "none";
-          if (feedEmptyState) feedEmptyState.style.display = "none";
-          
-          const card = createCampaignCard(data.message, url);
-          campaignHistoryFeed.prepend(card);
-          manualMarketingDescription.value = "";
-          manualMarketingUrl.value = "";
-        } else {
-          manualMarketingStatus.textContent = "✗ " + (data.error || "Generation failed");
+        if (!res.ok) {
+          manualMarketingStatus.textContent = "✗ " + (data.error || "Failed to start campaign");
           manualMarketingStatus.className = "status-msg error";
+          generateManualMarketingBtn.disabled = false;
+          return;
         }
+
+        const jobId = data.job_id;
+        const card = createApolloCampaignCard();
+        card.dataset.jobId = jobId;
+        if (feedEmptyState) feedEmptyState.style.display = "none";
+        campaignHistoryFeed.prepend(card);
+        manualMarketingDescription.value = "";
+
+        startMarketingPoll(jobId, card);
+
       } catch (e) {
         manualMarketingStatus.textContent = "✗ Network error";
         manualMarketingStatus.className = "status-msg error";
-      } finally {
         generateManualMarketingBtn.disabled = false;
       }
     });
@@ -1447,25 +1913,26 @@ HTML_PAGE = """
     }
 
     fetchApolloBtn.addEventListener("click", async () => {
-      const perPage = document.getElementById("apollo-per-page").value;
-      const maxPages = document.getElementById("apollo-max-pages").value;
-      const keyword = document.getElementById("apollo-keyword").value.trim();
-      const rolesVal = document.getElementById("apollo-roles").value.trim();
-      
+      const fetchCount = document.getElementById("apollo-fetch-count").value;
+      const keyword    = document.getElementById("apollo-keyword").value.trim();
+      const rolesVal   = document.getElementById("apollo-roles").value.trim();
+
       fetchApolloBtn.disabled = true;
-      apolloFetchStatus.textContent = "⌛ Querying Apollo API & Enriching Leads...";
+      apolloFetchStatus.textContent = "⌛ Fetching leads via Apify & enriching...";
       apolloFetchStatus.className = "status-msg";
       apolloFetchStatus.style.display = "block";
-      
+
+      // Hide preview while re-fetching
+      document.getElementById("campaign-preview-panel").style.display = "none";
+
       try {
         const res = await fetch("/api/apollo/fetch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            per_page: parseInt(perPage), 
-            max_pages: parseInt(maxPages),
-            keyword: keyword,
-            roles: rolesVal
+          body: JSON.stringify({
+            fetch_count: parseInt(fetchCount),
+            keyword:     keyword,
+            roles:       rolesVal
           })
         });
         const data = await res.json();
@@ -1473,6 +1940,7 @@ HTML_PAGE = """
           apolloFetchStatus.textContent = "✓ " + data.message;
           apolloFetchStatus.className = "status-msg success";
           loadApolloContacts();
+          loadCampaignPreview();       // ← show preview panel
         } else {
           apolloFetchStatus.textContent = "✗ " + (data.error || "Fetch failed");
           apolloFetchStatus.className = "status-msg error";
@@ -1482,14 +1950,258 @@ HTML_PAGE = """
         apolloFetchStatus.className = "status-msg error";
       } finally {
         fetchApolloBtn.disabled = false;
-        setTimeout(() => {
-          apolloFetchStatus.style.display = "none";
-        }, 5000);
+        setTimeout(() => { apolloFetchStatus.style.display = "none"; }, 6000);
       }
     });
 
+    // ── Campaign Preview ──────────────────────────────────────────────
+    async function loadCampaignPreview() {
+      const panel    = document.getElementById("campaign-preview-panel");
+      const loading  = document.getElementById("preview-loading");
+      const content  = document.getElementById("preview-content");
+      const logsSec  = document.getElementById("send-all-logs-section");
+      const sendBtn  = document.getElementById("send-all-btn");
+
+      panel.style.display   = "block";
+      loading.style.display = "block";
+      content.style.display = "none";
+      logsSec.style.display = "none";
+      document.getElementById("send-all-log-output").innerHTML = "";
+      document.getElementById("send-all-summary").textContent  = "";
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>&nbsp; <span id="send-all-btn-label">Send Campaign to All Leads</span>';
+      sendBtn.style.background = "";
+
+      try {
+        const res  = await fetch("/api/apollo/preview-campaign");
+        if (!res.ok) {
+          loading.innerHTML = '<span style="color:var(--danger); font-size:0.84rem;">✗ No unsent leads to preview.</span>';
+          return;
+        }
+        const data = await res.json();
+        document.getElementById("preview-subject").value = data.subject || "";
+        document.getElementById("preview-body").value    = data.body    || "";
+        document.getElementById("preview-lead-count").textContent =
+          "Sample for: " + escapeHtml(data.sample_name || data.sample_email) +
+          " · " + data.total_unsent + " lead(s) will be contacted";
+        document.getElementById("send-all-btn-label").textContent =
+          "Send Campaign to All " + data.total_unsent + " Lead(s)";
+        loading.style.display = "none";
+        content.style.display = "block";
+      } catch (e) {
+        loading.innerHTML = '<span style="color:var(--danger); font-size:0.84rem;">✗ Network error loading preview.</span>';
+      }
+    }
+
+    document.getElementById("regenerate-preview-btn").addEventListener("click", loadCampaignPreview);
+
+    // ── Send Campaign to All ──────────────────────────────────────────
+    let _sendAllPoll = null;
+
+    document.getElementById("send-all-btn").addEventListener("click", async () => {
+      const sendBtn  = document.getElementById("send-all-btn");
+      const logsSec  = document.getElementById("send-all-logs-section");
+      const logOut   = document.getElementById("send-all-log-output");
+      const summary  = document.getElementById("send-all-summary");
+
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…';
+
+      logsSec.style.display = "block";
+      logOut.innerHTML = "";
+      summary.textContent = "Starting…";
+
+      function appendLog(msg, level) {
+        const color = level === "error" ? "var(--danger)"
+                    : level === "ok"    ? "var(--success)"
+                    : "var(--muted)";
+        const line = document.createElement("div");
+        line.style.color = color;
+        line.textContent = msg;
+        logOut.appendChild(line);
+        logOut.scrollTop = logOut.scrollHeight;
+      }
+
+      try {
+        const startRes = await fetch("/api/apollo/send-all", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+        });
+        const startData = await startRes.json();
+        if (!startRes.ok) {
+          appendLog("✗ " + (startData.error || "Failed to start"), "error");
+          sendBtn.disabled = false;
+          sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>&nbsp; Retry Send';
+          return;
+        }
+
+        const jobId = startData.job_id;
+        let lastIdx = 0;
+
+        if (_sendAllPoll) clearInterval(_sendAllPoll);
+        _sendAllPoll = setInterval(async () => {
+          try {
+            const sRes = await fetch("/api/apollo/send-all/status?job_id=" + jobId);
+            const job  = await sRes.json();
+
+            // Drain new log lines
+            const newLogs = (job.logs || []).slice(lastIdx);
+            lastIdx = (job.logs || []).length;
+            newLogs.forEach(e => appendLog(e.msg, e.level));
+
+            if (job.status === "running") {
+              summary.textContent = "Running… sent " + (job.sent || 0) + ", failed " + (job.failed || 0);
+            } else if (job.status === "done") {
+              clearInterval(_sendAllPoll); _sendAllPoll = null;
+              summary.textContent = "✓ Done — sent " + job.sent + "/" + job.total + ", failed " + job.failed;
+              sendBtn.disabled = false;
+              sendBtn.innerHTML = '<i class="fas fa-check-circle"></i> Campaign Sent';
+              sendBtn.style.background = "var(--success)";
+              loadApolloContacts();
+              // Hide the entire Campaign Preview panel once all sends finish
+              setTimeout(() => {
+                const panel = document.getElementById("campaign-preview-panel");
+                if (panel) panel.style.display = "none";
+                // Reset inner state so a fresh preview shows next time
+                document.getElementById("preview-content").style.display  = "none";
+                document.getElementById("send-all-logs-section").style.display = "none";
+                document.getElementById("send-all-log-output").innerHTML = "";
+                document.getElementById("send-all-summary").textContent  = "";
+                sendBtn.style.background = "";
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>&nbsp; <span id="send-all-btn-label">Send Campaign to All Leads</span>';
+              }, 2000);
+            } else if (job.status === "error") {
+              clearInterval(_sendAllPoll); _sendAllPoll = null;
+              summary.textContent = "✗ Error: " + (job.error || "unknown");
+              appendLog("✗ " + (job.error || "unknown"), "error");
+              sendBtn.disabled = false;
+              sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>&nbsp; Retry Send';
+            }
+          } catch (e) { console.error("Send-all poll error:", e); }
+        }, 2000);
+
+      } catch (e) {
+        appendLog("✗ Network error", "error");
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>&nbsp; Retry Send';
+      }
+    });
+
+    // ─── LinkedIn Pipeline ─────────────────────────────────────────────
+    const linkedinPipelineList  = document.getElementById("linkedin-pipeline-list");
+    const linkedinApprovalList  = document.getElementById("linkedin-approval-list");
+
+    function createLinkedinPipelineCard(item) {
+      const snippet = (item.latest_text || "").slice(0, 200);
+      return `
+        <div class="item-card pipeline">
+          <div class="item-badge">LinkedIn DM</div>
+          <div class="item-name">${escapeHtml(item.other_name || 'Unknown')}</div>
+          <div class="item-sub">${escapeHtml(item.other_profile_url || '')}</div>
+          <div class="item-snippet">${escapeHtml(snippet)}</div>
+          <div class="item-date">Received: ${escapeHtml(item.latest_ts || '—')} · Last touch ${formatTime(item.created_at)}</div>
+        </div>
+      `;
+    }
+
+    function createLinkedinApprovalCard(item) {
+      // Optional original-campaign panel — the DM we originally sent them.
+      let originalHtml = "";
+      if (item.original_campaign && item.original_campaign.body) {
+        const oc = item.original_campaign;
+        const tag = oc.name ? `${oc.name}${oc.company ? ' · ' + oc.company : ''}` : (oc.company || '');
+        originalHtml = `
+          <div class="input-label" style="display:flex; align-items:center; gap:6px;">
+            <i class="fab fa-linkedin" style="color:var(--accent);"></i>
+            Your original LinkedIn DM${tag ? ' → ' + escapeHtml(tag) : ''}
+          </div>
+          <div class="msg-box" style="border-left:3px solid var(--accent); white-space:pre-wrap;">${escapeHtml(oc.body)}</div>
+        `;
+      }
+
+      // Optional conversation history panel — every message in the thread.
+      let historyHtml = "";
+      if (Array.isArray(item.messages) && item.messages.length > 1) {
+        const rows = item.messages.map(m => {
+          const ts = m.ts ? ` <span style="color:var(--muted); font-size:0.7rem;">(${escapeHtml(m.ts)})</span>` : '';
+          return `<div style="margin-bottom:8px;">
+            <div style="font-weight:600; font-size:0.75rem; color:var(--accent);">${escapeHtml(m.sender || '?')}${ts}</div>
+            <div style="font-size:0.82rem; white-space:pre-wrap;">${escapeHtml(m.text || '')}</div>
+          </div>`;
+        }).join("");
+        historyHtml = `
+          <div class="input-label">Full conversation</div>
+          <div class="msg-box" style="max-height: 220px;">${rows}</div>
+        `;
+      }
+
+      return `
+        <div class="item-card approval" data-id="${item.id}">
+          <div class="item-name">${escapeHtml(item.other_name || 'Unknown')}</div>
+          <div class="item-sub"><a href="${escapeHtml(item.other_profile_url || '#')}" target="_blank" style="color:var(--accent); text-decoration:none;">${escapeHtml(item.other_profile_url || '')}</a></div>
+          <div class="approval-form">
+            ${originalHtml}
+            ${historyHtml}
+            <div class="input-label">Most Recent Incoming Message</div>
+            <div class="msg-box" style="white-space:pre-wrap;">${escapeHtml(item.latest_text || '')}</div>
+            <div class="input-label">AI Draft Reply (editable)</div>
+            <textarea data-draft>${escapeHtml(item.draft || '')}</textarea>
+            <div class="button-row">
+              <button class="btn btn-primary" onclick="decideLinkedin('${item.id}', 'reply', this)">Approve & Send DM</button>
+              <button class="btn btn-secondary" onclick="decideLinkedin('${item.id}', 'cancel', this)">Discard</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadLinkedinItems() {
+      try {
+        const res = await fetch("/api/linkedin/items");
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = data.items || [];
+
+        document.getElementById("li-stat-queue").textContent = items.length;
+        document.getElementById("linkedin-pipeline-count").textContent = items.length + " Items";
+        document.getElementById("linkedin-approval-count").textContent = items.length + " Pending";
+
+        // Preserve any in-progress textarea edits across re-renders.
+        const drafts = {};
+        linkedinApprovalList.querySelectorAll("textarea").forEach(ta => {
+          const card = ta.closest(".item-card");
+          if (card) drafts[card.dataset.id] = ta.value;
+        });
+
+        linkedinPipelineList.innerHTML = items.map(createLinkedinPipelineCard).join("");
+        linkedinApprovalList.innerHTML = items.map(createLinkedinApprovalCard).join("");
+
+        linkedinApprovalList.querySelectorAll("textarea").forEach(ta => {
+          const card = ta.closest(".item-card");
+          if (card && drafts[card.dataset.id]) ta.value = drafts[card.dataset.id];
+        });
+      } catch (e) { console.error("loadLinkedinItems:", e); }
+    }
+
+    async function decideLinkedin(id, action, btn) {
+      const card = btn.closest(".item-card");
+      const draft = card.querySelector("textarea").value;
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/linkedin/" + action, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, final_draft: draft }),
+        });
+        if (res.ok) loadLinkedinItems();
+        else alert("Action failed");
+      } catch (e) { alert("Error connecting to server"); }
+    }
+
     loadItems();
+    loadLinkedinItems();
+    loadMarketingHistory();
     setInterval(loadItems, 3000);
+    setInterval(loadLinkedinItems, 5000);
   </script>
 </body>
 </html>
@@ -1535,6 +2247,7 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
                         "body": clean_email_body(item["email_data"].get("body", "")),
                         "generated_subject": f"Re: {item['email_data'].get('subject', 'No Subject')}",
                         "draft": item["draft"],
+                        "original_campaign": item.get("original_campaign"),
                         "created_at": item.get("created_at", 0),
                     }
                     for item_id, item in _ITEMS.items()
@@ -1552,6 +2265,28 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
                     if it["result"]["status"] == "pending"
                 )
             self._send(200, _stats_snapshot(pending))
+            return
+
+        if path == "/api/linkedin/items":
+            with _LINKEDIN_ITEMS_LOCK:
+                items = [
+                    {
+                        "id": item_id,
+                        "other_name":        (item["linkedin_data"] or {}).get("other_name", "Unknown"),
+                        "other_profile_url": (item["linkedin_data"] or {}).get("other_profile_url", ""),
+                        "thread_url":        (item["linkedin_data"] or {}).get("thread_url", ""),
+                        "latest_text":       (item["linkedin_data"] or {}).get("latest_text", ""),
+                        "latest_ts":         (item["linkedin_data"] or {}).get("latest_ts", ""),
+                        "messages":          (item["linkedin_data"] or {}).get("messages", []),
+                        "draft":             item["draft"],
+                        "original_campaign": item.get("original_campaign"),
+                        "created_at":        item.get("created_at", 0),
+                    }
+                    for item_id, item in _LINKEDIN_ITEMS.items()
+                    if item["result"]["status"] == "pending"
+                ]
+            items.sort(key=lambda x: x.get("created_at", 0))
+            self._send(200, {"items": items})
             return
 
         if path == "/api/marketing-prompt":
@@ -1572,6 +2307,68 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
             self._send(200, {"prompt": prompt})
             return
 
+        if path == "/api/marketing/apollo-campaign/status":
+            from urllib.parse import parse_qs
+            job_id = parse_qs(urlparse(self.path).query).get("job_id", [None])[0]
+            if not job_id:
+                self._send(400, {"error": "Missing job_id"})
+                return
+            with _APOLLO_CAMPAIGN_JOBS_LOCK:
+                job = _APOLLO_CAMPAIGN_JOBS.get(job_id)
+            if not job:
+                self._send(404, {"error": "Job not found"})
+                return
+            self._send(200, dict(job))
+            return
+
+        if path == "/api/marketing/campaigns":
+            # Full campaign history for the Marketing Agent tab. Used by the
+            # frontend on page load + tab activation so the feed persists
+            # across refreshes (same model as Apollo CRM contacts).
+            with _APOLLO_CAMPAIGN_JOBS_LOCK:
+                campaigns = [
+                    {"job_id": jid, **job}
+                    for jid, job in _APOLLO_CAMPAIGN_JOBS.items()
+                ]
+            campaigns.sort(key=lambda c: c.get("created_at", 0), reverse=True)
+            self._send(200, {"campaigns": campaigns})
+            return
+
+        if path == "/api/apollo/preview-campaign":
+            import apollo_agent
+            contacts = apollo_agent.load_contacts()
+            unsent = [c for c in contacts if c.get("status") not in ("Sent", "Discarded") and c.get("email")]
+            if not unsent:
+                self._send(404, {"error": "No unsent leads to preview"})
+                return
+            sample = unsent[0]
+            res = apollo_agent.generate_campaign_draft(sample["email"])
+            if "error" in res:
+                self._send(400, res)
+            else:
+                self._send(200, {
+                    "subject": res.get("subject", ""),
+                    "body": res.get("draft", ""),
+                    "sample_name": sample.get("name", ""),
+                    "sample_email": sample.get("email", ""),
+                    "total_unsent": len(unsent),
+                })
+            return
+
+        if path == "/api/apollo/send-all/status":
+            from urllib.parse import parse_qs
+            job_id = parse_qs(urlparse(self.path).query).get("job_id", [None])[0]
+            if not job_id:
+                self._send(400, {"error": "Missing job_id"})
+                return
+            with _SEND_ALL_JOBS_LOCK:
+                job = _SEND_ALL_JOBS.get(job_id)
+            if not job:
+                self._send(404, {"error": "Job not found"})
+                return
+            self._send(200, dict(job))
+            return
+
         self._send(404, {"error": "Not found"})
 
     def do_POST(self):
@@ -1582,12 +2379,17 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
             "/api/marketing-prompt",
             "/api/manual-marketing",
             "/api/send-manual-marketing",
+            "/api/marketing/apollo-campaign",
+            "/api/marketing/apollo-campaign/send",
             "/api/apollo/fetch",
+            "/api/apollo/send-all",
             "/api/apollo/generate-draft",
             "/api/apollo/send",
             "/api/apollo/discard",
             "/api/apollo/restore",
-            "/api/apollo/prompt"
+            "/api/apollo/prompt",
+            "/api/linkedin/reply",
+            "/api/linkedin/cancel",
         ):
             self._send(404, {"error": "Not found"})
             return
@@ -1622,13 +2424,82 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
             if not message:
                 self._send(400, {"error": "Missing message"})
                 return
-            
+
             print(f"Sending manual campaign to LinkedIn ({profile_url or 'default profile'})...")
             success = send_dm.send_dm(message, profile_url=profile_url)
             if success:
                 self._send(200, {"status": "ok"})
             else:
                 self._send(500, {"error": "Message not send due to no connection with this account"})
+            return
+
+        if path == "/api/marketing/apollo-campaign":
+            description = payload.get("description", "")
+            keyword = payload.get("keyword", "hospital")
+            roles_input = payload.get("roles", "")
+            fetch_count = int(payload.get("fetch_count", 10))
+
+            if not description:
+                self._send(400, {"error": "Missing product description"})
+                return
+
+            if isinstance(roles_input, str):
+                roles = [r.strip() for r in roles_input.split(",") if r.strip()]
+            elif isinstance(roles_input, list):
+                roles = [str(r).strip() for r in roles_input if str(r).strip()]
+            else:
+                roles = None
+
+            job_id = str(uuid.uuid4())
+            with _APOLLO_CAMPAIGN_JOBS_LOCK:
+                _APOLLO_CAMPAIGN_JOBS[job_id] = {
+                    "status": "running",
+                    "progress_msg": "Starting...",
+                    "description": description,
+                    "message": None,
+                    "total": 0,
+                    "sent": 0,
+                    "failed": 0,
+                    "results": [],
+                    "created_at": time.time(),
+                }
+            _save_marketing_campaigns_to_disk()
+
+            t = threading.Thread(
+                target=_run_apollo_campaign_job,
+                args=(job_id, description, keyword, roles, fetch_count),
+                daemon=True,
+            )
+            t.start()
+            print(f"[Marketing Apollo] Started background job {job_id}")
+            self._send(200, {"status": "started", "job_id": job_id})
+            return
+
+        if path == "/api/marketing/apollo-campaign/send":
+            job_id = payload.get("job_id")
+            message = (payload.get("message") or "").strip() or None
+            if not job_id:
+                self._send(400, {"error": "Missing job_id"})
+                return
+            with _APOLLO_CAMPAIGN_JOBS_LOCK:
+                job = _APOLLO_CAMPAIGN_JOBS.get(job_id)
+                if not job:
+                    self._send(404, {"error": "Job not found"})
+                    return
+                if job.get("status") != "preview_ready":
+                    self._send(400, {"error": f"Job not in preview_ready state (current: {job.get('status')})"})
+                    return
+                if message:
+                    job["message"] = message
+
+            t = threading.Thread(
+                target=_run_apollo_campaign_send_job,
+                args=(job_id, message),
+                daemon=True,
+            )
+            t.start()
+            print(f"[Marketing Apollo] Send phase started for job {job_id}")
+            self._send(200, {"status": "started", "job_id": job_id})
             return
 
         if path == "/api/marketing-prompt":
@@ -1651,13 +2522,22 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
                 self._send(400, {"error": "Missing prompt field"})
             return
 
+        if path == "/api/apollo/send-all":
+            job_id = str(uuid.uuid4())
+            with _SEND_ALL_JOBS_LOCK:
+                _SEND_ALL_JOBS[job_id] = {"status": "running", "logs": [], "total": 0, "sent": 0, "failed": 0}
+            t = threading.Thread(target=_run_send_all_job, args=(job_id,), daemon=True)
+            t.start()
+            print(f"[Send-All] Started background job {job_id}")
+            self._send(200, {"status": "started", "job_id": job_id})
+            return
+
         if path == "/api/apollo/fetch":
             import apollo_agent
-            per_page = payload.get("per_page", 25)
-            max_pages = payload.get("max_pages", 1)
-            keyword = payload.get("keyword", "pharmaceutical")
+            fetch_count = payload.get("fetch_count", 100)
+            keyword = payload.get("keyword", "hospital")
             roles_input = payload.get("roles", [])
-            
+
             # clean up roles if it's a list or parse comma-separated values
             if isinstance(roles_input, str):
                 roles = [r.strip() for r in roles_input.split(",") if r.strip()]
@@ -1666,17 +2546,14 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
             else:
                 roles = None
 
-            print(f"[Apollo CRM Server] Request to fetch and enrich leads. per_page={per_page}, max_pages={max_pages}, keyword='{keyword}', roles={roles}")
-            result_msg = apollo_agent.fetch_apollo_leads(per_page=per_page, max_pages=max_pages, keyword=keyword, roles=roles)
+            print(f"[Apollo CRM Server] Request to fetch leads via Apify. fetch_count={fetch_count}, keyword='{keyword}', roles={roles}")
+            result_msg = apollo_agent.fetch_apollo_leads(fetch_count=fetch_count, keyword=keyword, roles=roles)
             print(f"[Apollo CRM Server] Lead fetch completed. Outcome: {result_msg}")
             self._send(200, {"status": "ok", "message": result_msg})
             return
 
         if path == "/api/apollo/generate-draft":
             import apollo_agent
-            from graph import Graph
-            from config import CLIENT_ID, AUTHORITY, GRAPH_SCOPES
-            
             email = payload.get("email")
             if not email:
                 print("[Apollo CRM Server] ERROR: generate-draft missing email parameter")
@@ -1687,32 +2564,9 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
             if "error" in res:
                 print(f"[Apollo CRM Server] ERROR: Draft generation failed: {res['error']}")
                 self._send(400, res)
-                return
-            
-            # Immediately auto-send via Graph API
-            subject = res.get("subject")
-            body = res.get("body") or res.get("draft")
-            
-            try:
-                print(f"[Apollo CRM Server] Auto-dispatching outbound Graph API email to {email}...")
-                g = Graph(CLIENT_ID, AUTHORITY, GRAPH_SCOPES)
-                success = g.send_new_email(email, subject, body)
-                if success:
-                    print(f"[Apollo CRM Server] Outbound email successfully sent to {email} and saved in Sent Items.")
-                    # Update CRM state
-                    contacts = apollo_agent.load_contacts()
-                    contact = next((c for c in contacts if c["email"] == email), None)
-                    if contact:
-                        contact["status"] = "Sent"
-                        contact["subject"] = subject
-                        contact["draft"] = body
-                        apollo_agent.save_contacts(contacts)
-                    self._send(200, {"status": "success", "subject": subject, "draft": body})
-                else:
-                    self._send(200, {"status": "draft", "subject": subject, "draft": body, "error": "Microsoft Graph API returned failure."})
-            except Exception as e:
-                print(f"[Apollo CRM Server] EXCEPTION: Outbound Graph send error for {email}: {e}")
-                self._send(200, {"status": "draft", "subject": subject, "draft": body, "error": str(e)})
+            else:
+                print(f"[Apollo CRM Server] Draft generated successfully for: {email}")
+                self._send(200, res)
             return
 
         if path == "/api/apollo/send":
@@ -1795,6 +2649,24 @@ class ApprovalRequestHandler(BaseHTTPRequestHandler):
             return
 
 
+        if path in ("/api/linkedin/reply", "/api/linkedin/cancel"):
+            with _LINKEDIN_ITEMS_LOCK:
+                li_item = _LINKEDIN_ITEMS.get(item_id)
+                if not li_item:
+                    self._send(404, {"error": "LinkedIn approval item not found"})
+                    return
+                if li_item["result"]["status"] != "pending":
+                    self._send(400, {"error": "Already decided"})
+                    return
+                if path == "/api/linkedin/reply":
+                    li_item["result"]["status"] = "approved"
+                    li_item["result"]["final_draft"] = final_draft
+                else:
+                    li_item["result"]["status"] = "cancelled"
+                    li_item["result"]["final_draft"] = None
+            self._send(200, {"status": "ok"})
+            return
+
         with _ITEMS_LOCK:
             item = _ITEMS.get(item_id)
             if not item:
@@ -1833,6 +2705,11 @@ def _start_server_once():
         if _SERVER:
             return
 
+        # Restore previous Marketing Agent campaign history from disk so the
+        # feed survives process restarts (parallels how Apollo CRM contacts
+        # persist via apollo_contacts.json).
+        _load_marketing_campaigns_from_disk()
+
         _SERVER = ThreadingHTTPServer(
             (APPROVAL_HOST, APPROVAL_PORT), ApprovalRequestHandler
         )
@@ -1851,17 +2728,22 @@ def ensure_approval_server():
     _start_server_once()
 
 
-def enqueue_approval(email_data, draft):
+def enqueue_approval(email_data, draft, original_campaign=None):
     """
     Add an email + draft to the approval queue without blocking the agent loop.
     The UI updates via polling; the main process should call pop_completed_approvals()
     periodically to send replies and clear completed items.
+
+    original_campaign: optional {"subject": str, "body": str, "company": str, "name": str}
+    describing the outbound campaign this inbound email is a reply to. Surfaced in
+    the approval card so the human reviewer sees what was originally sent.
     """
     _start_server_once()
     item_id = str(uuid.uuid4())
     item = {
         "email_data": email_data,
         "draft": draft,
+        "original_campaign": original_campaign,
         "event": None,
         "result": {"status": "pending", "final_draft": None},
         "created_at": time.time(),
@@ -1898,6 +2780,78 @@ def pop_completed_approvals():
         for item_id in to_pop:
             _ITEMS.pop(item_id, None)
     return done
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# LinkedIn DM approval queue (parallel to the email queue above)
+# ───────────────────────────────────────────────────────────────────────────
+
+def enqueue_linkedin_approval(linkedin_data, draft, original_campaign=None):
+    """Queue an inbound LinkedIn DM + its AI-drafted reply for human approval.
+
+    linkedin_data: {
+        "thread_url":        str,
+        "other_profile_url": str,    # used as the send target when approved
+        "other_name":        str,
+        "latest_text":       str,    # the incoming message that triggered this
+        "latest_ts":         str,
+        "latest_id":         str,    # stable hash, used for dedupe
+        "messages":          list[{sender, text, ts}],  # full thread chronological
+    }
+    draft: AI-generated reply text
+    original_campaign: {"body": str, "name": str, "company": str} for the UI card
+    """
+    _start_server_once()
+    item_id = str(uuid.uuid4())
+    item = {
+        "linkedin_data": linkedin_data,
+        "draft": draft,
+        "original_campaign": original_campaign,
+        "result": {"status": "pending", "final_draft": None},
+        "created_at": time.time(),
+    }
+    with _LINKEDIN_ITEMS_LOCK:
+        _LINKEDIN_ITEMS[item_id] = item
+    print(f"Queued LinkedIn DM for approval: from {linkedin_data.get('other_name')!r}"
+          f" via {linkedin_data.get('other_profile_url')} -> open {APPROVAL_URL}")
+    return item_id
+
+
+def pop_completed_linkedin_approvals():
+    """Return and remove LinkedIn items that were approved or cancelled in the UI.
+    Each entry: {"linkedin_data", "approved": bool, "final_draft": str|None}."""
+    done = []
+    with _LINKEDIN_ITEMS_LOCK:
+        to_pop = []
+        for item_id, item in list(_LINKEDIN_ITEMS.items()):
+            status = item["result"]["status"]
+            if status == "pending":
+                continue
+            done.append({
+                "id": item_id,
+                "linkedin_data": item["linkedin_data"],
+                "approved": status == "approved",
+                "final_draft": item["result"].get("final_draft"),
+            })
+            to_pop.append(item_id)
+        for item_id in to_pop:
+            _LINKEDIN_ITEMS.pop(item_id, None)
+    return done
+
+
+def linkedin_queue_has_message_id(message_id: str) -> bool:
+    """Check if a given inbound LinkedIn message ID is already pending in the
+    approval queue. Used by main1.py to avoid re-queueing the same message on
+    every poll while it's awaiting human action."""
+    if not message_id:
+        return False
+    with _LINKEDIN_ITEMS_LOCK:
+        for item in _LINKEDIN_ITEMS.values():
+            if item["result"]["status"] != "pending":
+                continue
+            if (item.get("linkedin_data") or {}).get("latest_id") == message_id:
+                return True
+    return False
 
 
 def _add_approval_item(email_data, draft):

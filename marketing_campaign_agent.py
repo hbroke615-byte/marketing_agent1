@@ -44,6 +44,24 @@ MARKETING_EXTRACTION_INSTRUCTIONS = (
     "legal claims, or guarantees that are not supported by the document."
 )
 
+# Always appended on top of whatever marketing prompt is in effect (default or
+# user-saved). Keeps LinkedIn messages free of fake-looking placeholders.
+LINKEDIN_WRITING_RULES = (
+    "CRITICAL WRITING RULES for the linkedin_message field — these are non-negotiable:\n"
+    "1. NEVER use bracketed placeholders of any kind. Forbidden examples include "
+    "[Your Name], [Name], [Your Company], [Company Name], [Your Position], "
+    "[Title], [Insert ...], [Date], [Recipient], [Contact]. The message must "
+    "be 100% ready to send with zero post-edits.\n"
+    "2. Do NOT include a sign-off signature line that names the sender "
+    "(e.g. \"Best regards, [Your Name]\" or \"Sincerely, John\"). LinkedIn "
+    "already shows who sent the message, so end the message either with a "
+    "natural call-to-action sentence, or with relevant hashtags if appropriate.\n"
+    "3. Open naturally — \"Hi there,\" or a hook sentence — never with "
+    "\"Dear [Name]\" or \"Hello [Recipient]\".\n"
+    "4. If you cannot determine a real fact, omit the sentence entirely rather "
+    "than inserting a placeholder for it."
+)
+
 
 def get_marketing_system_prompt() -> str:
     """Return the saved custom prompt, or the built-in default if none is saved."""
@@ -185,6 +203,12 @@ def analyze_attachment(
     if "is_marketing_product_document" not in effective_system_prompt:
         effective_system_prompt += "\n\n" + MARKETING_EXTRACTION_INSTRUCTIONS
 
+    # The bracket-placeholder rules are *always* appended — even if the user has
+    # saved a custom prompt that pre-dates them — so the model can never emit
+    # things like "[Your Name]" or a fake signature line.
+    if "CRITICAL WRITING RULES" not in effective_system_prompt:
+        effective_system_prompt += "\n\n" + LINKEDIN_WRITING_RULES
+
     try:
         response = openai.beta.chat.completions.parse(
             model="gpt-4o",
@@ -221,13 +245,20 @@ def generate_campaign_from_text(
     instruction = """
     You are a marketing expert. Generate a professional LinkedIn marketing campaign based on the provided input.
     Even if the input is short (like a company name), use your knowledge to create a professional overview and a personalized DM.
-    
-    IMPORTANT RULES:
-    1. Do NOT use placeholders like [Name], [Your Name], [Company], or [Date].
-    2. Start the message naturally (e.g., "Hi there," or just start with a hook).
-    3. Do NOT include a signature placeholder at the end.
-    4. The message must be 100% ready to send as-is.
-    
+
+    CRITICAL WRITING RULES — these are non-negotiable:
+    1. NEVER use bracketed placeholders of any kind. Forbidden examples include
+       [Your Name], [Name], [Your Company], [Company Name], [Your Position],
+       [Title], [Insert ...], [Date], [Recipient], [Contact]. If you cannot
+       determine a real value, omit the sentence entirely.
+    2. Do NOT include a sign-off signature line that names the sender
+       (e.g. "Best regards, [Your Name]" or "Sincerely, John"). LinkedIn already
+       shows who sent the message, so end the message either with a natural
+       call-to-action sentence, or with relevant hashtags if appropriate.
+    3. Open naturally — "Hi there," or a hook sentence — never with
+       "Dear [Name]" or "Hello [Recipient]".
+    4. The message must be 100% ready to send as-is with zero post-edits.
+
     Return the data in the specified JSON format.
     Always set is_marketing_product_document to true.
     """

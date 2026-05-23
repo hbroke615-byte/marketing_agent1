@@ -23,7 +23,7 @@ def send_dm(message, profile_url=None):
         browser = None
 
         try:
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(headless=False)
             context = browser.new_context(storage_state=LINKEDIN_STORAGE_STATE)
             page = context.new_page()
 

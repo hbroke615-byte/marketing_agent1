@@ -1,17 +1,23 @@
 import os
 import json
 import logging
-import requests
 import openai
-from datetime import datetime
+from datetime import datetime, timezone
+from apify_client import ApifyClient
 from config import OPENAI_API_KEY
 
 # Set OpenAI API key
 openai.api_key = OPENAI_API_KEY
 
 JSON_FILE = "apollo_contacts.json"
+MARKETING_JSON_FILE = "marketing_contacts.json"
 
-log_formatter = logging.Formatter("%(asctime)s  %(levelname)s  [CRM Agent] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+# Paid Apollo-alternative actor on Apify. Returns validated work emails,
+# personal emails, LinkedIn URLs, company info — all with structured fields
+# (no truncated "..." like Google snippets). Override via APIFY_LEADS_ACTOR.
+APIFY_ACTOR = os.getenv("APIFY_LEADS_ACTOR", "code_crafter/leads-finder")
+
+log_formatter = logging.Formatter("%(asctime)s  %(levelname)s  [Apollo CRM] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
 file_handler = logging.FileHandler("apollo_crm.log", encoding="utf-8")
 file_handler.setFormatter(log_formatter)
@@ -36,9 +42,152 @@ TARGET_TITLES = [
     "sourcing manager",
 ]
 
+_USA_VARIANTS = {"united states", "us", "usa", "united states of america"}
+
+def _is_usa(country: str) -> bool:
+    return (country or "").strip().lower() in _USA_VARIANTS
+
+def get_apify_api_token():
+    """Retrieve Apify API token from env."""
+    return os.getenv("APIFY_API_TOKEN", "")
+
 def get_apollo_api_key():
-    """Retrieve Apollo API Key from env."""
-    return os.getenv("APOLLO_API_KEY", "")
+    """Backwards-compatible alias used by the UI's `has_key` check.
+    Now returns the Apify token (the active data source)."""
+    return get_apify_api_token()
+
+
+def _first(item: dict, *keys: str) -> str:
+    """First non-empty string value among the given top-level keys."""
+    for k in keys:
+        v = item.get(k)
+        if v is None:
+            continue
+        if isinstance(v, dict):
+            continue
+        s = str(v).strip()
+        if s and s.lower() not in ("none", "null", "n/a"):
+            return s
+    return ""
+
+
+def _nested(item: dict, parent: str, *keys: str) -> str:
+    obj = item.get(parent)
+    if not isinstance(obj, dict):
+        return ""
+    return _first(obj, *keys)
+
+
+def _normalise_apify_record(item: dict) -> dict:
+    """Map a leads-finder dataset record to our CRM contact schema.
+    Robust to field-name variations across actor versions."""
+
+    name = _first(item, "name", "full_name", "fullName", "contact_name")
+    if not name:
+        first = _first(item, "first_name", "firstName")
+        last  = _first(item, "last_name", "lastName")
+        name  = f"{first} {last}".strip()
+
+    title = _first(item,
+                   "title", "job_title", "jobTitle",
+                   "contact_title", "headline", "position")
+
+    email = _first(item,
+                   "email", "work_email", "workEmail",
+                   "business_email", "businessEmail",
+                   "personal_email", "personalEmail",
+                   "contact_email")
+
+    company = _first(item,
+                     "company", "company_name", "companyName",
+                     "organization", "organization_name", "organizationName",
+                     "employer")
+    if not company:
+        company = _nested(item, "organization", "name", "company_name")
+    if not company:
+        company = _nested(item, "company", "name")
+
+    industry = _first(item, "industry", "company_industry", "companyIndustry")
+    if not industry:
+        industry = _nested(item, "organization", "industry") \
+                   or _nested(item, "company", "industry")
+    if not industry:
+        industry = "Hospital & Health Care"
+
+    city = _first(item, "city", "contact_city", "location_city",
+                  "person_city", "present_city")
+    if not city:
+        city = _nested(item, "location", "city") or _nested(item, "address", "city")
+
+    country = _first(item, "country", "contact_country", "location_country", "person_country")
+    if not country:
+        country = _nested(item, "location", "country") or _nested(item, "address", "country")
+    if not country:
+        country = "United States"
+
+    linkedin = _first(item,
+                      "linkedin", "linkedin_url", "linkedinUrl",
+                      "linkedinProfile", "linkedin_profile",
+                      "contact_linkedin_url")
+    if not linkedin:
+        linkedin = _nested(item, "social", "linkedin")
+
+    return {
+        "name":     name,
+        "title":    title,
+        "email":    (email or "").strip(),
+        "company":  company,
+        "industry": industry or "Hospital & Health Care",
+        "city":     city,
+        "country":  country or "United States",
+        "linkedin": linkedin,
+    }
+
+
+def _run_apify_leads(fetch_count: int, keywords: list[str], roles: list[str]) -> list[dict]:
+    """Call the leads-finder Apify actor once with the given filters.
+    Returns the raw dataset items (callers normalise + filter)."""
+    token = get_apify_api_token()
+    if not token:
+        log.error("APIFY_API_TOKEN is missing — cannot fetch leads")
+        return []
+
+    client = ApifyClient(token)
+
+    run_input = {
+        "fetch_count":        fetch_count,
+        "file_name":          "USA Hospital Pharmacy Contacts",
+        "contact_job_title":  roles,
+        "contact_location":   ["united states"],
+        "company_industry":   [
+            "hospital & health care",
+            "pharmaceuticals",
+            "medical devices",
+            "biotechnology",
+            "medical practice",
+        ],
+        "company_keywords":   keywords,
+        "email_status":       ["validated"],
+    }
+
+    log.info(f"Calling Apify actor {APIFY_ACTOR} — fetch_count={fetch_count}, "
+             f"{len(keywords)} keyword(s), {len(roles)} role(s)")
+
+    try:
+        run = client.actor(APIFY_ACTOR).call(run_input=run_input)
+    except Exception as e:
+        log.error(f"Apify actor call failed: {e}")
+        return []
+
+    dataset_id = run.get("defaultDatasetId")
+    if not dataset_id:
+        log.error("Apify run did not return a dataset id")
+        return []
+
+    log.info(f"Apify actor finished. Reading dataset {dataset_id} …")
+    items = list(client.dataset(dataset_id).iterate_items())
+    log.info(f"Dataset contains {len(items)} raw lead records")
+    return items
 
 def load_contacts() -> list[dict]:
     """Load contacts from nested JSON file."""
@@ -59,130 +208,236 @@ def save_contacts(contacts: list[dict]):
     except Exception as e:
         log.error(f"Error saving to {JSON_FILE}: {e}")
 
-def fetch_apollo_leads(per_page: int = 25, max_pages: int = 1, keyword: str = "pharmaceutical", roles: list[str] = None) -> str:
+
+def load_marketing_contacts() -> list[dict]:
+    """Load Marketing-Agent-specific contacts from a separate JSON file."""
+    if os.path.exists(MARKETING_JSON_FILE):
+        try:
+            with open(MARKETING_JSON_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            log.error(f"Error loading {MARKETING_JSON_FILE}: {e}")
+    return []
+
+
+def save_marketing_contacts(contacts: list[dict]):
+    """Save Marketing-Agent-specific contacts to a separate JSON file."""
+    try:
+        with open(MARKETING_JSON_FILE, "w", encoding="utf-8") as f:
+            json.dump(contacts, f, indent=2, ensure_ascii=False)
+        log.info(f"Saved {len(contacts)} marketing contacts to {MARKETING_JSON_FILE}")
+    except Exception as e:
+        log.error(f"Error saving to {MARKETING_JSON_FILE}: {e}")
+
+
+def get_sent_campaign_emails() -> dict[str, dict]:
+    """Return mapping of {lowercased_email: contact} for every Apollo CRM contact
+    whose status is 'Sent' or 'Replied'. The Pipeline uses this to recognise
+    inbound mail as a campaign reply (Sent → first reply, Replied → follow-up)."""
+    contacts = load_contacts()
+    return {
+        c["email"].lower(): c
+        for c in contacts
+        if c.get("status") in ("Sent", "Replied") and c.get("email")
+    }
+
+
+def _normalize_linkedin_url(url: str) -> str:
+    """LinkedIn profile URLs come in a few flavours (with/without trailing slash,
+    http vs https, www vs no-www). Normalise to a single canonical form so the
+    DM Pipeline filter matches reliably."""
+    s = (url or "").strip().lower().rstrip("/")
+    s = s.replace("http://", "https://")
+    s = s.replace("https://linkedin.com/", "https://www.linkedin.com/")
+    return s
+
+
+def get_sent_dm_recipients() -> dict[str, dict]:
+    """Mirror of get_sent_campaign_emails() but for LinkedIn. Returns
+    {normalized_linkedin_url: contact} for every marketing_contacts.json entry
+    we've DM'd ('Sent' or 'Replied' status).  Used by the LinkedIn Pipeline
+    filter to recognise incoming DMs as campaign replies."""
+    contacts = load_marketing_contacts()
+    out = {}
+    for c in contacts:
+        url = c.get("linkedin")
+        if not url:
+            continue
+        if c.get("status") not in ("Sent", "Replied"):
+            continue
+        out[_normalize_linkedin_url(url)] = c
+    return out
+
+
+def _name_key(name: str) -> str:
+    """Normalise a person name for fuzzy matching: lowercase, strip degree
+    suffixes like ', PharmD' or ', MBA', collapse whitespace.  LinkedIn often
+    shows the same person as 'Jane Smith' vs 'Jane Smith, PharmD' vs
+    'Jane Smith, MBA' — we treat all three as the same person."""
+    s = (name or "").lower().strip()
+    # Drop everything after the first comma (degrees, certifications, titles)
+    if "," in s:
+        s = s.split(",", 1)[0].strip()
+    # Collapse whitespace
+    s = " ".join(s.split())
+    return s
+
+
+def match_marketing_contact(profile_url: str = "", name: str = "") -> dict | None:
+    """Find a contact in marketing_contacts.json matching the given LinkedIn
+    profile URL OR display name. Used by the LinkedIn Pipeline because the
+    URL LinkedIn shows in messaging is the URN form (e.g. /in/ACoAA...)
+    while our stored URL is the vanity form (/in/muhammad-haris-2a805b24b/).
+    The URLs don't string-match, so we fall back to name matching when needed.
+
+    Returns the first matched contact (must have status in Sent/Replied) or
+    None. Caller is responsible for any further filtering."""
+    contacts = load_marketing_contacts()
+    url_needle = _normalize_linkedin_url(profile_url) if profile_url else ""
+    name_needle = _name_key(name)
+
+    for c in contacts:
+        if c.get("status") not in ("Sent", "Replied"):
+            continue
+        if url_needle and _normalize_linkedin_url(c.get("linkedin") or "") == url_needle:
+            return c
+
+    # No URL match — fall back to name (case + degree-suffix insensitive)
+    if name_needle:
+        for c in contacts:
+            if c.get("status") not in ("Sent", "Replied"):
+                continue
+            if _name_key(c.get("name") or "") == name_needle:
+                return c
+
+    return None
+
+
+def mark_marketing_contact_replied(linkedin_url: str) -> dict | None:
+    """When an inbound LinkedIn DM matches a sent-campaign contact, flip their
+    status to 'Replied'. Returns the matched contact so the caller can pull
+    the original DM (stored in c['draft']) for the approval card. Idempotent."""
+    contacts = load_marketing_contacts()
+    needle = _normalize_linkedin_url(linkedin_url)
+    matched = None
+    for c in contacts:
+        if _normalize_linkedin_url(c.get("linkedin") or "") != needle:
+            continue
+        if c.get("status") not in ("Sent", "Replied"):
+            continue
+        matched = c
+        c["status"] = "Replied"
+        c["replied_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        break
+    if matched:
+        save_marketing_contacts(contacts)
+        log.info(f"Marketing contact {linkedin_url} marked as Replied")
+    return matched
+
+
+def mark_contact_replied(email: str) -> dict | None:
+    """When an inbound email matches a sent-campaign contact, flip their status
+    to 'Replied' so the Apollo CRM tab shows who's responded. Returns the
+    matched contact (post-update) so the caller can pull the original campaign
+    subject/body for context. Idempotent: a contact already in 'Replied' is
+    just touched with a fresh timestamp."""
+    contacts = load_contacts()
+    needle = (email or "").lower()
+    matched = None
+    for c in contacts:
+        if c.get("email", "").lower() != needle:
+            continue
+        if c.get("status") not in ("Sent", "Replied"):
+            continue
+        matched = c
+        c["status"] = "Replied"
+        c["replied_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        break
+    if matched:
+        save_contacts(contacts)
+        log.info(f"Contact {email} marked as Replied")
+    return matched
+
+def fetch_apollo_leads(fetch_count: int = 100, keyword: str = "hospital", roles: list[str] = None) -> str:
     """
-    Fetch leads from Apollo.io API based on keywords and target titles.
-    Enriches them to get email and details, then saves/updates apollo_contacts.json.
+    Fetch leads via the Apify leads-finder actor and merge into apollo_contacts.json.
+    (Name kept for backwards-compatibility with the UI; data source is Apify, not Apollo.)
     """
-    api_key = get_apollo_api_key()
-    if not api_key:
-        return "APOLLO_API_KEY is missing. Please add it to your .env file or configuration."
+    if not get_apify_api_token():
+        return "APIFY_API_TOKEN is missing. Please add it to your .env file or configuration."
+
+    try:
+        fetch_count = int(fetch_count)
+    except (TypeError, ValueError):
+        fetch_count = 100
+    if fetch_count < 1:
+        fetch_count = 1
 
     if not keyword:
-        keyword = "pharmaceutical"
+        keyword = "hospital"
     if not roles:
         roles = TARGET_TITLES
 
-    headers = {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "accept": "application/json",
-        "x-api-key": api_key,
-    }
+    if isinstance(keyword, list):
+        keywords = [str(k).strip() for k in keyword if str(k).strip()]
+    else:
+        keywords = [k.strip() for k in str(keyword).split(",") if k.strip()]
+    if not keywords:
+        keywords = ["hospital"]
 
-    all_ids = []
-    seen_ids = set()
+    raw = _run_apify_leads(fetch_count=fetch_count, keywords=keywords, roles=roles)
+    if not raw:
+        return "No leads returned by Apify for these filters."
 
-    # Step 1: Search people (keyword: custom)
-    for page in range(1, max_pages + 1):
-        params = {
-            "per_page": per_page,
-            "page": page,
-            "q_keywords": keyword,
-        }
-        for title in roles:
-            params.setdefault("person_titles[]", [])
-            if isinstance(params["person_titles[]"], list):
-
-                params["person_titles[]"].append(title)
-
-        try:
-            res = requests.post(
-                "https://api.apollo.io/api/v1/mixed_people/api_search",
-                headers=headers,
-                params=params,
-                timeout=25,
-            )
-            res.raise_for_status()
-            data = res.json()
-            people = data.get("people", [])
-            ids = [p["id"] for p in people if p.get("has_email")]
-            log.info(f"Page {page} search: found {len(people)} people, {len(ids)} have emails")
-            
-            for pid in ids:
-                if pid not in seen_ids:
-                    seen_ids.add(pid)
-                    all_ids.append(pid)
-        except Exception as e:
-            log.error(f"Search API error on page {page}: {e}")
-            break
-
-    if not all_ids:
-        return "No leads found matching the target pharmaceutical criteria."
-
-    # Step 2: Enrich — trade IDs for full profiles
+    # Normalise → require email → USA filter
     enriched_contacts = []
-    chunk_size = 10
-    for i in range(0, len(all_ids), chunk_size):
-        chunk = all_ids[i : i + chunk_size]
-        payload = {
-            "reveal_personal_emails": False,
-            "details": [{"id": pid} for pid in chunk],
-        }
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    for item in raw:
+        row = _normalise_apify_record(item)
+        if not row["email"]:
+            continue
+        # Drop "..." truncated company names just in case.
+        company = row["company"] or ""
+        if company.endswith("...") or company.startswith("..."):
+            continue
+        enriched_contacts.append({
+            "id":         row["email"],
+            "name":       row["name"],
+            "title":      row["title"],
+            "email":      row["email"],
+            "company":    row["company"],
+            "industry":   row["industry"],
+            "city":       row["city"],
+            "country":    row["country"],
+            "linkedin":   row["linkedin"],
+            "fetched_at": ts,
+            "status":     "Lead Fetched",
+            "subject":    None,
+            "draft":      None,
+        })
 
-        try:
-            res = requests.post(
-                "https://api.apollo.io/api/v1/people/bulk_match",
-                headers=headers,
-                json=payload,
-                timeout=25,
-            )
-            res.raise_for_status()
-            matches = res.json().get("matches", [])
-            for p in matches:
-                email = p.get("email")
-                if not email:
-                    continue
-                org = p.get("organization") or {}
-                
-                # Check for duplicates or update existing
-                enriched_contacts.append({
-                    "id": p.get("id"),
-                    "name": (p.get("name") or "").strip(),
-                    "title": (p.get("title") or "").strip(),
-                    "email": email.strip(),
-                    "company": (org.get("name") or "").strip(),
-                    "industry": (org.get("industry") or "").strip(),
-                    "city": (p.get("city") or "").strip(),
-                    "country": (p.get("country") or "").strip(),
-                    "linkedin": (p.get("linkedin_url") or "").strip(),
-                    "fetched_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                    "status": "Lead Fetched",
-                    "subject": None,
-                    "draft": None,
-                })
-            log.info(f"Enriched chunk {i+1}-{i+len(chunk)}: retrieved {len(matches)} profiles")
-        except Exception as e:
-            log.error(f"Enrichment error on chunk starting at {i}: {e}")
+    before_filter = len(enriched_contacts)
+    enriched_contacts = [c for c in enriched_contacts if _is_usa(c.get("country", ""))]
+    log.info(f"USA filter: kept {len(enriched_contacts)}/{before_filter} enriched contacts")
 
-    # Load existing to avoid overwriting or losing state (like approved drafts)
+    # Merge into existing apollo_contacts.json, preserving any draft/sent state.
     existing = load_contacts()
     existing_by_email = {c["email"]: c for c in existing}
 
     added_count = 0
     updated_count = 0
+
     for c in enriched_contacts:
         email = c["email"]
         if email in existing_by_email:
-            # Update core details but keep status/draft if they exist
             existing_c = existing_by_email[email]
             existing_c.update({
-                "name": c["name"],
-                "title": c["title"],
-                "company": c["company"],
+                "name":     c["name"],
+                "title":    c["title"],
+                "company":  c["company"],
                 "industry": c["industry"],
-                "city": c["city"],
-                "country": c["country"],
+                "city":     c["city"],
+                "country":  c["country"],
                 "linkedin": c["linkedin"],
             })
             updated_count += 1
@@ -191,78 +446,155 @@ def fetch_apollo_leads(per_page: int = 25, max_pages: int = 1, keyword: str = "p
             added_count += 1
 
     save_contacts(existing)
+    log.info(f"Fetch complete — added {added_count} new, updated {updated_count} existing.")
+    return (f"Fetched {added_count + updated_count} leads ({added_count} new, "
+            f"{updated_count} updated). Review the preview and click Send to dispatch campaigns.")
 
-    # Automatically scan the entire database for any unsent active prospects to dispatch them instantly!
-    leads_to_auto_send = [c for c in existing if c.get("status") not in ("Sent", "Discarded")]
 
-    # Human-out-of-loop dynamic campaign generation & mailing via Graph API
-    log.info(f"[Auto CRM Send] Initiating direct campaign mailing loop for {len(leads_to_auto_send)} fetched leads...")
-    
+def send_campaign_to_all(on_log=None) -> dict:
+    """
+    Generate a personalised campaign email for every unsent lead and send via Graph API.
+    Calls on_log({"msg": str, "level": "info"|"ok"|"error"}) for live UI streaming.
+    """
     from graph import Graph
     from config import CLIENT_ID, AUTHORITY, GRAPH_SCOPES
-    
+
+    def emit(msg, level="info"):
+        log.info(msg)
+        if on_log:
+            on_log({"msg": msg, "level": level})
+
+    contacts = load_contacts()
+    targets = [c for c in contacts if c.get("status") not in ("Sent", "Discarded") and c.get("email")]
+    total = len(targets)
+
+    if total == 0:
+        emit("No leads to send — all contacts are already sent or discarded.", "info")
+        return {"total": 0, "sent": 0, "failed": 0}
+
+    emit(f"Starting campaign send for {total} lead(s)…")
+
     try:
         graph_client = Graph(CLIENT_ID, AUTHORITY, GRAPH_SCOPES)
-    except Exception as ge:
-        log.error(f"[Auto CRM Send] Failed to initialize Microsoft Graph API: {ge}")
-        graph_client = None
+    except Exception as e:
+        emit(f"Failed to initialise Graph API: {e}", "error")
+        return {"error": str(e)}
 
-    auto_sent_count = 0
-    auto_fail_count = 0
+    sent_count = 0
+    fail_count = 0
 
-    for lead in leads_to_auto_send:
+    for i, lead in enumerate(targets):
         email = lead["email"]
-        log.info(f"[Auto CRM Send] Auto-generating personalized campaign email for: {email}")
-        
+        emit(f"[{i+1}/{total}] Generating draft for {email}…")
+
         res = generate_campaign_draft(email)
         if "error" in res:
-            log.error(f"[Auto CRM Send] Draft generation failed for {email}: {res['error']}")
-            auto_fail_count += 1
+            emit(f"[{i+1}/{total}] Draft failed for {email}: {res['error']}", "error")
+            fail_count += 1
             continue
 
         subject = res.get("subject")
         body = res.get("body") or res.get("draft")
-        
         if not subject or not body:
-            log.error(f"[Auto CRM Send] Missing subject or body in generated draft for {email}")
-            auto_fail_count += 1
+            emit(f"[{i+1}/{total}] Empty draft for {email}", "error")
+            fail_count += 1
             continue
 
-        # Reload latest contacts from disk to prevent race conditions or state loss
-        existing = load_contacts()
-        lead_ref = next((c for c in existing if c["email"] == email), None)
-        if not lead_ref:
-            log.error(f"[Auto CRM Send] Lead {email} not found in reloaded list")
-            auto_fail_count += 1
+        emit(f'[{i+1}/{total}] Sending to {email} — "{subject[:55]}"…')
+        try:
+            success = graph_client.send_new_email(email, subject, body)
+            if success:
+                fresh = load_contacts()
+                ref = next((c for c in fresh if c["email"] == email), None)
+                if ref:
+                    ref["status"] = "Sent"
+                    ref["subject"] = subject
+                    ref["draft"] = body
+                    save_contacts(fresh)
+                emit(f"[{i+1}/{total}] Sent OK → {email}", "ok")
+                sent_count += 1
+            else:
+                emit(f"[{i+1}/{total}] Graph API returned failure for {email}", "error")
+                fail_count += 1
+        except Exception as e:
+            emit(f"[{i+1}/{total}] Exception for {email}: {e}", "error")
+            fail_count += 1
+
+    emit(f"Campaign complete — Sent: {sent_count}, Failed: {fail_count}", "ok")
+    return {"total": total, "sent": sent_count, "failed": fail_count}
+
+
+def fetch_linkedin_contacts(fetch_count: int = 10, keyword: str = "hospital", roles: list[str] = None) -> list[dict]:
+    """
+    Fetch leads via Apify for the Marketing Agent and save to marketing_contacts.json
+    (kept separate from the Apollo CRM apollo_contacts.json).
+    Returns contacts that have a LinkedIn profile URL.
+    """
+    if not get_apify_api_token():
+        log.error("APIFY_API_TOKEN missing — cannot fetch LinkedIn contacts")
+        return []
+
+    try:
+        fetch_count = int(fetch_count)
+    except (TypeError, ValueError):
+        fetch_count = 10
+    if fetch_count < 1:
+        fetch_count = 1
+
+    if not keyword:
+        keyword = "hospital"
+    if not roles:
+        roles = TARGET_TITLES
+
+    if isinstance(keyword, list):
+        keywords = [str(k).strip() for k in keyword if str(k).strip()]
+    else:
+        keywords = [k.strip() for k in str(keyword).split(",") if k.strip()]
+    if not keywords:
+        keywords = ["hospital"]
+
+    raw = _run_apify_leads(fetch_count=fetch_count, keywords=keywords, roles=roles)
+    if not raw:
+        log.warning("Apify returned no leads for LinkedIn fetch")
+        return []
+
+    enriched = []
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    for item in raw:
+        row = _normalise_apify_record(item)
+        if not row["linkedin"]:
             continue
+        enriched.append({
+            "id":         row["email"] or row["linkedin"],
+            "name":       row["name"],
+            "title":      row["title"],
+            "email":      row["email"],
+            "company":    row["company"],
+            "industry":   row["industry"],
+            "city":       row["city"],
+            "country":    row["country"],
+            "linkedin":   row["linkedin"],
+            "fetched_at": ts,
+            "status":     "Lead Fetched",
+            "subject":    None,
+            "draft":      None,
+        })
 
-        # Save generated email to DB (Intermediate state in case sending fails)
-        lead_ref["subject"] = subject
-        lead_ref["draft"] = body
-        lead_ref["status"] = "Draft Generated"
-        save_contacts(existing)
+    before_filter = len(enriched)
+    enriched = [c for c in enriched if _is_usa(c.get("country", ""))]
+    log.info(f"USA filter: kept {len(enriched)}/{before_filter} LinkedIn contacts")
 
-        # Dispatch via Outlook Graph API
-        if graph_client:
-            try:
-                log.info(f"[Auto CRM Send] Sending outbound campaign to: {email} (Subject: '{subject}')")
-                success = graph_client.send_new_email(email, subject, body)
-                if success:
-                    lead_ref["status"] = "Sent"
-                    save_contacts(existing)
-                    log.info(f"[Auto CRM Send] Campaign sent successfully to: {email}!")
-                    auto_sent_count += 1
-                else:
-                    log.error(f"[Auto CRM Send] Microsoft Graph API returned failure sending email to {email}")
-                    auto_fail_count += 1
-            except Exception as se:
-                log.error(f"[Auto CRM Send] Exception occurred while sending campaign to {email}: {se}")
-                auto_fail_count += 1
-        else:
-            log.warn(f"[Auto CRM Send] Microsoft Graph API is not authenticated. Skipping auto-sending for: {email}")
-            auto_fail_count += 1
-
-    return f"Successfully fetched and enriched leads! Added {added_count} new leads, updated {updated_count} existing. Auto-sent: {auto_sent_count}, failed/skipped: {auto_fail_count}."
+    existing = load_marketing_contacts()
+    existing_ids = {c.get("id") for c in existing if c.get("id")}
+    added = 0
+    for c in enriched:
+        if c["id"] not in existing_ids:
+            existing.append(c)
+            added += 1
+    save_marketing_contacts(existing)
+    log.info(f"fetch_linkedin_contacts: {added} new contacts added to {MARKETING_JSON_FILE}, "
+             f"{len(enriched)} fetched with LinkedIn this run")
+    return enriched
 
 DEFAULT_SYSTEM_PROMPT = """You are a premium B2B Sales and Marketing Director at Galaxy Pharma.
 Your goal is to write a highly personalized, compelling, and warm cold outreach email to pitch high-quality pharmaceutical supply chain, active pharmaceutical ingredient (API) sourcing, contract manufacturing, or distribution solutions.
