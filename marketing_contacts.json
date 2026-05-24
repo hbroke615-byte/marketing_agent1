@@ -165,5 +165,50 @@
     "status": "Lead Fetched",
     "subject": null,
     "draft": null
+  },
+  {
+    "id": "vinnie.dam@mixlab.com",
+    "name": "Vinnie Dam",
+    "title": "Founder / Chief Pharmacy Officer",
+    "email": "vinnie.dam@mixlab.com",
+    "company": "Mixlab",
+    "industry": "Pharmaceuticals",
+    "city": "New York",
+    "country": "United States",
+    "linkedin": "https://www.linkedin.com/in/vinnie-dam-9981435",
+    "fetched_at": "2026-05-24 13:16:19",
+    "status": "Lead Fetched",
+    "subject": null,
+    "draft": null
+  },
+  {
+    "id": "matthew@summerhealth.com",
+    "name": "Matthew Woo",
+    "title": "Co-founder, President & CPO",
+    "email": "matthew@summerhealth.com",
+    "company": "Summer Health",
+    "industry": "Hospital & Health Care",
+    "city": "San Francisco",
+    "country": "United States",
+    "linkedin": "https://www.linkedin.com/in/matthewedanwoo",
+    "fetched_at": "2026-05-24 13:16:19",
+    "status": "Lead Fetched",
+    "subject": null,
+    "draft": null
+  },
+  {
+    "id": "ztackett@resistome-clinical.com",
+    "name": "Zachary Tackett",
+    "title": "Founder And Chief Pharmacy Officer",
+    "email": "ztackett@resistome-clinical.com",
+    "company": "Resistome Clinical Services",
+    "industry": "Hospital & Health Care",
+    "city": "",
+    "country": "United States",
+    "linkedin": "https://www.linkedin.com/in/zachary-tackett-pharmd-14a89231",
+    "fetched_at": "2026-05-24 13:16:19",
+    "status": "Lead Fetched",
+    "subject": null,
+    "draft": null
   }
 ]

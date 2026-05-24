@@ -18183,3 +18183,21 @@
 2026-05-24 03:12:04  INFO  [Apollo CRM] USA filter: kept 10/10 LinkedIn contacts
 2026-05-24 03:12:04  INFO  [Apollo CRM] Saved 11 marketing contacts to marketing_contacts.json
 2026-05-24 03:12:04  INFO  [Apollo CRM] fetch_linkedin_contacts: 10 new contacts added to marketing_contacts.json, 10 fetched with LinkedIn this run
+2026-05-24 18:14:29  INFO  [Apollo CRM] Calling Apify actor code_crafter/leads-finder — fetch_count=10, 61 keyword(s), 10 role(s)
+2026-05-24 18:15:22  INFO  [Apollo CRM] Apify actor finished. Reading dataset CFXlqRq6xSdvj0rg3 …
+2026-05-24 18:16:19  INFO  [Apollo CRM] Dataset contains 10 raw lead records
+2026-05-24 18:16:19  INFO  [Apollo CRM] USA filter: kept 10/10 LinkedIn contacts
+2026-05-24 18:16:19  INFO  [Apollo CRM] Saved 14 marketing contacts to marketing_contacts.json
+2026-05-24 18:16:19  INFO  [Apollo CRM] fetch_linkedin_contacts: 3 new contacts added to marketing_contacts.json, 10 fetched with LinkedIn this run
+2026-05-24 18:17:38  INFO  [Apollo CRM] Calling Apify actor code_crafter/leads-finder — fetch_count=1, 61 keyword(s), 10 role(s)
+2026-05-24 18:17:58  INFO  [Apollo CRM] Apify actor finished. Reading dataset LNWieAATtQIdi450t …
+2026-05-24 18:17:58  INFO  [Apollo CRM] Dataset contains 1 raw lead records
+2026-05-24 18:17:58  INFO  [Apollo CRM] USA filter: kept 1/1 LinkedIn contacts
+2026-05-24 18:17:58  INFO  [Apollo CRM] Saved 14 marketing contacts to marketing_contacts.json
+2026-05-24 18:17:58  INFO  [Apollo CRM] fetch_linkedin_contacts: 0 new contacts added to marketing_contacts.json, 1 fetched with LinkedIn this run
+2026-05-24 18:25:17  INFO  [Apollo CRM] Calling Apify actor code_crafter/leads-finder — fetch_count=1, 61 keyword(s), 10 role(s)
+2026-05-24 18:25:36  INFO  [Apollo CRM] Apify actor finished. Reading dataset a4GciPj3hgdYmw82N …
+2026-05-24 18:25:37  INFO  [Apollo CRM] Dataset contains 1 raw lead records
+2026-05-24 18:25:37  INFO  [Apollo CRM] USA filter: kept 1/1 LinkedIn contacts
+2026-05-24 18:25:37  INFO  [Apollo CRM] Saved 14 marketing contacts to marketing_contacts.json
+2026-05-24 18:25:37  INFO  [Apollo CRM] fetch_linkedin_contacts: 0 new contacts added to marketing_contacts.json, 1 fetched with LinkedIn this run

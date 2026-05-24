@@ -1,8 +1,9 @@
 # Python virtual environment
 .venv/
 venv/
+ai/
 
-# Environment variables
+# Environment variables — set in Railway dashboard instead of committing
 .env
 
 # Python cache files
@@ -24,19 +25,15 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Build artifacts
+deploy.zip
+.azure_staging/
 
+# Misc
+"New folder"/
+linkedin_dump.html
 
-
-# Auth / token files
-*.bin
-*.cache
-*.db
-*.json
-
-
-.env
-.venv/
-*.bin
-*.db
-*.json
-*.cache
+# NOTE: .json, .bin, and .db data files (e.g. processed_email_ids.json,
+# outlook_token_cache.bin, marketing_contacts.json, analytics.db) are
+# intentionally NOT ignored — they are part of the runtime state that needs
+# to ship to Railway so the app behaves the same as on the local machine.
