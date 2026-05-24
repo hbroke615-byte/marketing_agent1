@@ -1,0 +1,23 @@
+.git
+.gitignore
+.venv
+venv
+ai
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+.vscode
+.idea
+.ipynb_checkpoints
+.azure_staging
+deploy.zip
+package_for_azure.ps1
+AZURE_DEPLOY.md
+"New folder"
+*.log
+Proposal.pdf
+Proposal1.pdf
+linkedin_dump.html
+.env
